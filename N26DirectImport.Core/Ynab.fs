@@ -11,10 +11,16 @@ module Ynab =
         "Accept", "application/json"
     ]
 
-    let transactionsEndpoint =
+    let getTransactionsEndpoint =
         sprintf
-            "https://api.youneedabudget.com/v1/budgets/%s/transactions"
-            Budgets.main
+            "https://api.youneedabudget.com/v1/budgets/%s/accounts/%s/transactions"
+            (Budgets.main.ToString())
+            (Accounts.n26.ToString())
+
+    let putAndPostTransactionsEndpoint =
+            sprintf
+                "https://api.youneedabudget.com/v1/budgets/%s/transactions"
+                (Budgets.main.ToString())
 
     let private parseCleared = function | "reconciled" -> Reconciled
                                         | "cleared" -> Cleared
@@ -22,6 +28,7 @@ module Ynab =
 
     let private makeTransactionModel (yt : YnabData.Transaction) =
         {
+            Id = yt.Id.String.Value
             PayeeId = None
             Date = yt.Date.Value
             PayeeName = yt.PayeeName
@@ -35,17 +42,23 @@ module Ynab =
             Cleared = parseCleared yt.Cleared
         }
 
-    let getTransactions headers (since : DateTime) =
+    let getTransactionsString headers (since : DateTime option) =
         Http.RequestString (
-            transactionsEndpoint,
-            query = [ "since_date", since.ToString("yyyy-MM-dd") ],
+            getTransactionsEndpoint,
+            query =
+                (match since with
+                | None -> []
+                | Some d -> [ "since_date", d.ToString("yyyy-MM-dd") ]),
             headers = headers
         )
+
+    let getTransactions headers since =
+        getTransactionsString headers since
         |> YnabData.Parse
         |> fun x -> x.Data.Transactions
         |> Seq.where(fun t -> t.AccountId = Some Accounts.n26)
         |> Seq.sortByDescending (fun yt -> yt.Date)
-        |> Seq.map (fun yt -> yt.Id.Guid.Value, makeTransactionModel yt)
+        |> Seq.map makeTransactionModel
         |> List.ofSeq
 
     let private fieldMappings =
@@ -81,7 +94,8 @@ module Ynab =
     let getUpdateTransaction original updated =
         fieldMappings
         |> Seq.map (fun (k, vf) -> k, vf original, vf updated)
-        |> Seq.where (fun (_, original, updated) -> original <> updated)
+        |> Seq.where (fun (k, original, updated) ->
+            k <> "import_id" && original <> updated)
         |> Seq.map (fun (k, _, v) ->
             let vs = match v with | Some x -> x | None -> "" in k, vs)
         |> Seq.toList

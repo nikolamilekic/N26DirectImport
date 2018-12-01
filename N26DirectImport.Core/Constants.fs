@@ -16,4 +16,4 @@ module Accounts =
     let n26 = Guid("01b3d10c-f050-4161-a7d5-4ddd3f3310b4")
 
 module Budgets =
-    let main = "1f585f96-3781-4f29-97c0-1f4124e26468"
+    let main = Guid("1f585f96-3781-4f29-97c0-1f4124e26468")

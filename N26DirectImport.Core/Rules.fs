@@ -3,7 +3,7 @@ module N26DirectImport.Core.Rules
 open System
 open FSharp.Data
 
-let private typesToClear = [ "PT"; "DT"; "CT"; "DD" ]
+let private typesToClear = [ "PT"; "DT"; "CT"; "DD"; "AV" ]
 
 let private makeImportId (nt : N26Transactions.Transaction) =
     [
@@ -11,22 +11,6 @@ let private makeImportId (nt : N26Transactions.Transaction) =
         nt.VisibleTs.ToString()
     ]
     |> curry String.Join "-"
-
-let findMatchingYnabTransaction transactions (nt : N26Transactions.Transaction) =
-    let amount = nt.Amount
-    let importId = makeImportId nt
-    transactions
-    |> List.tryFind (fun (_, yt) -> yt.ImportId = Some importId)
-    |> Option.orElseWith (fun () ->
-        transactions
-        |> List.tryFind (fun (_, yt) ->
-            yt.ImportId = None && yt.Amount = Some amount))
-
-let tryGetDateFromImportId yt =
-    match yt.ImportId with
-    | Some s when s.StartsWith("Nikola's N26 script-") ->
-        s.Substring("Nikola's N26 script-".Length) |> int64 |> Some
-    | _ -> None
 
 let private makeMetadata (nt : N26Transactions.Transaction) =
     [
@@ -107,7 +91,8 @@ let private rules = seq {
         match yt.Memo, makeMetadata t with
         | x, "" -> x
         | None, metadata -> Some metadata
-        | Some x, metadata when x.ToLower().Contains (metadata.ToLower()) -> Some x
+        | Some x, metadata when x.ToLower().Contains (metadata.ToLower()) ->
+            Some x
         | Some x, metadata -> Some (sprintf "%s %s" x metadata)
         |> fun memo -> { yt with Memo = memo }
 
@@ -118,15 +103,12 @@ let private rules = seq {
         | _ -> yt
 }
 
-let apply yt nt =
+let applyAddRules yt nt = Seq.fold (fun yt rule -> rule yt nt) yt rules
+let applyUpdateRules yt nt =
     let afterRules = Seq.fold (fun yt rule -> rule yt nt) yt rules
     {
-        Date = afterRules.Date
-        PayeeName = Option.orElse afterRules.PayeeName yt.PayeeName
-        PayeeId = Option.orElse afterRules.PayeeId yt.PayeeId
-        CategoryId = Option.orElse afterRules.CategoryId yt.CategoryId
-        Memo = afterRules.Memo
-        Amount = afterRules.Amount
-        ImportId = afterRules.ImportId
-        Cleared = afterRules.Cleared
+        yt with
+            Date = afterRules.Date
+            Memo = afterRules.Memo
+            Cleared = afterRules.Cleared
     }
