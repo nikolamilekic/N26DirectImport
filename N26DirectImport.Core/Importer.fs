@@ -4,7 +4,6 @@ open System
 open FSharp.Data
 open N26DirectImport.Core
 open Microsoft.WindowsAzure.Storage.Table
-open System.Linq.Expressions
 
 type Binding() =
     inherit TableEntity()
