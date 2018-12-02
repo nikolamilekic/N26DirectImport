@@ -4,6 +4,7 @@ open System
 open FSharp.Data
 open N26DirectImport.Core
 open Microsoft.WindowsAzure.Storage.Table
+open System.Data.SqlTypes
 
 type Binding() =
     inherit TableEntity()
@@ -84,7 +85,7 @@ let private getChangeSet
                         (fun key -> Map.tryFind key ynabTransactionsToConsider)
                 match yto with
                 | Some yt when yt.Cleared <> Reconciled ->
-                    toAdd, (nt, yt)::toUpdate
+                    toAdd, (nt, yt, false)::toUpdate
                 | Some _ -> toAdd, toUpdate
                 | None ->
                     let orphan =
@@ -94,12 +95,12 @@ let private getChangeSet
                             yt.Amount = Some nt.Amount)
                     match orphan with
                     | None -> nt::toAdd, toUpdate
-                    | Some orphan -> toAdd, (nt, orphan)::toUpdate)
+                    | Some orphan -> toAdd, (nt, orphan, true)::toUpdate)
             ([], [])
 
     let ynabTransactionsToUpdate =
         transactionsToUpdate
-        |> Seq.map snd
+        |> Seq.map (fun (_, yt, _) -> yt)
         |> Set.ofSeq
 
     let transactionsToDelete =
@@ -116,8 +117,8 @@ let private getChangeSet
         nt, Rules.applyAddRules initial nt),
 
     transactionsToUpdate
-    |> List.map (fun (nt, original) ->
-        nt, original, Rules.applyUpdateRules original nt),
+    |> List.map (fun (nt, original, rebind) ->
+        nt, original, Rules.applyUpdateRules original nt, rebind),
 
     transactionsToDelete
 
@@ -142,7 +143,7 @@ let private add ynabHeaders toAdd =
 let private update ynabHeaders toUpdate =
     let updates =
         toUpdate
-        |> Seq.map (fun (_, original, updated) ->
+        |> Seq.map (fun (_, original, updated, _) ->
             Ynab.getUpdateTransaction original updated
             |> Option.map (fun t -> original, updated, t))
         |> Seq.onlySome
@@ -203,7 +204,8 @@ type Facade(ynabKey, n26Username, n26Password, n26Token) =
 
                 yield!
                     toUpdate
-                    |> Seq.map (fun (nt, yt, _) ->
+                    |> Seq.where (fun (_, _, _, rebind) -> rebind)
+                    |> Seq.map (fun (nt, yt, _, _) ->
                         nt.VisibleTs.ToString(), yt.Id)
             }
             |> Seq.map (fun (ntk, ytk) ->
