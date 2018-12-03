@@ -125,6 +125,7 @@ namespace N26DirectImport.FunctionsApp
                 Connection = "AzureWebJobsStorage" )] string balance,
             ILogger log)
         {
+            log.LogInformation($"Retrieved balance at: {DateTime.Now}");
             return balance.ToString();
         }
     }
