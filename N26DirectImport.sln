@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.26124.0
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "N26DirectImport.Core", "N26DirectImport.Core\N26DirectImport.Core.fsproj", "{5ACBB84C-951F-45C1-B61A-DF3BC82849CE}"
+Project("{f2a71f9b-5d33-465a-a702-920d77279786}") = "N26DirectImport.Core", "src\N26DirectImport.Core\N26DirectImport.Core.fsproj", "{5ACBB84C-951F-45C1-B61A-DF3BC82849CE}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "N26DirectImport.FunctionsApp", "N26DirectImport.FunctionsApp\N26DirectImport.FunctionsApp.csproj", "{2A77B2A7-A2A0-4387-A8CB-B3BA7A233F57}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "N26DirectImport.FunctionsApp", "src\N26DirectImport.FunctionsApp\N26DirectImport.FunctionsApp.csproj", "{2A77B2A7-A2A0-4387-A8CB-B3BA7A233F57}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
