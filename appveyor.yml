@@ -1,0 +1,9 @@
+init:
+  - git config --global core.autocrlf input
+build_script:
+  - cmd: build.cmd -t Release
+test: off
+version: 1.{build}
+artifacts:
+  - path: publish.zip
+    name: publish
