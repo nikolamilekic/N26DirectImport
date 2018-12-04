@@ -4,7 +4,6 @@ open System
 open FSharp.Data
 open N26DirectImport.Core
 open Microsoft.WindowsAzure.Storage.Table
-open System.Data.SqlTypes
 
 type Binding() =
     inherit TableEntity()
@@ -92,7 +91,11 @@ let private getChangeSet
                         ynabOrphans
                         |> List.tryFind (fun yt ->
                             yt.Cleared <> Reconciled &&
-                            yt.Amount = Some nt.Amount)
+                            yt.Amount = Some nt.Amount &&
+
+                            toUpdate
+                            |> List.exists (fun (_, y, _) -> yt = y)
+                            |> not)
                     match orphan with
                     | None -> nt::toAdd, toUpdate
                     | Some orphan -> toAdd, (nt, orphan, true)::toUpdate)
