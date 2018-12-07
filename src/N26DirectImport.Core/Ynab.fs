@@ -35,10 +35,6 @@ module Ynab =
             CategoryId = yt.CategoryId
             Memo = yt.Memo
             Amount = yt.Amount |> Option.map (fun a -> (decimal a) / 1000.0m)
-            ImportId =
-                match yt.ImportId with
-                | Some x when not (String.IsNullOrWhiteSpace(x)) -> Some x
-                | _ -> None
             Cleared = parseCleared yt.Cleared
         }
 
@@ -69,7 +65,6 @@ module Ynab =
             "payee_name", fun t -> t.PayeeName
             "category_id", fun t -> t.CategoryId |> mapString
             "memo", fun t -> t.Memo
-            "import_id", fun t -> t.ImportId
             "cleared", fun t -> match t.Cleared with
                                 | Cleared -> Some "cleared"
                                 | Reconciled -> Some "reconciled"

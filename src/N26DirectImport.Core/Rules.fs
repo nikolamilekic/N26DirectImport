@@ -5,13 +5,6 @@ open FSharp.Data
 
 let private typesToClear = [ "PT"; "DT"; "CT"; "DD"; "AV" ]
 
-let private makeImportId (nt : N26Transactions.Transaction) =
-    [
-        "Nikola's N26 script"
-        nt.VisibleTs.ToString()
-    ]
-    |> curry String.Join "-"
-
 let private makeMetadata (nt : N26Transactions.Transaction) =
     [
         "Merchant: ", nt.MerchantName
@@ -31,10 +24,9 @@ let getDateFromN26Transaction (nt : N26Transactions.Transaction) =
     |> fun d -> d.DateTime
 
 let private rules = seq {
-    yield fun yt nt ->
+    yield fun yt (nt : N26Transactions.Transaction) ->
         {
             yt with
-                ImportId = makeImportId nt |> Some
                 Cleared = if List.contains nt.Type typesToClear
                           then Cleared else yt.Cleared
                 Date = getDateFromN26Transaction nt
