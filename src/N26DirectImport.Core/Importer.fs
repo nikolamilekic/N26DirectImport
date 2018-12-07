@@ -109,9 +109,9 @@ let private getChangeSet
     let transactionsToDelete =
         ynabOrphans
         |> List.where (fun o ->
-            o.ImportId.IsSome &&
             o.Cleared <> Reconciled &&
-            Set.contains o ynabTransactionsToUpdate |> not)
+            Set.contains o ynabTransactionsToUpdate |> not &&
+            Map.containsKey o.Id ynabToN26)
 
     transactionsToAdd
     |> List.map (fun nt ->
