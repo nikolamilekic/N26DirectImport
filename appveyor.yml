@@ -1,7 +1,7 @@
 init:
   - git config --global core.autocrlf input
 build_script:
-  - cmd: build.cmd -t Release
+  - cmd: build.cmd -t appveyor
 test: off
 version: 1.{build}
 branches:

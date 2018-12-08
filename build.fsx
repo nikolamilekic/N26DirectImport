@@ -2,9 +2,12 @@
 nuget Fake.Core.Target
 nuget Fake.DotNet.Cli
 nuget Fake.IO.Zip
+nuget Fake.DotNet.AssemblyInfoFile
 nuget FSharp.Data
 nuget FSharp.Core //"
 #load "./.fake/build.fsx/intellisense.fsx"
+
+open System.IO
 
 open Fake.Core
 open Fake.Core.TargetOperators
@@ -14,10 +17,12 @@ open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
 open FSharp.Data
 
-let solution = "N26DirectImport.sln"
+let productName = "N26DirectImport"
+let solution = productName + ".sln"
 let binPath = "src/N26DirectImport.FunctionsApp/bin/Release/netcoreapp2.1"
 let publishPath = binPath </> "publish"
 let zipFileName = "publish.zip"
+let buildNumber = Environment.environVarOrNone "APPVEYOR_BUILD_NUMBER"
 
 Target.create "Clean" <| fun _ ->
     Seq.allPairs [|"src"|] [|"bin"; "obj"|]
@@ -50,7 +55,45 @@ Target.create "Release" <| fun _ ->
         )
 
     if response.StatusCode <> 200 then response.ToString() |> failwith
+Target.create "UpdateAssemblyInfo" <| fun _ ->
+    let (|Fsproj|Csproj|) (projectFileName : string) =
+        match projectFileName with
+        | f when f.EndsWith("fsproj") -> Fsproj
+        | f when f.EndsWith("csproj") -> Csproj
+        | _ -> failwith (sprintf "Project file %s not supported. Unknown project type." projectFileName)
 
-"Clean" ==> "Build" ==> "CopyBuildOutput" ==> "Publish" ==> "Zip" ==> "Release"
+    let version = buildNumber |> Option.defaultValue "9999" |> sprintf "1.%s.0.0"
+    !! "src/**/*.??proj"
+    |> Seq.iter (fun projectPath ->
+        let projectName = Path.GetFileNameWithoutExtension projectPath
+        let directoryName = Path.GetDirectoryName projectPath
+        let attributes = [
+            AssemblyInfo.Title projectName
+            AssemblyInfo.Product productName
+            AssemblyInfo.Version version
+            AssemblyInfo.FileVersion version
+        ]
+        match projectPath with
+        | Fsproj ->
+            AssemblyInfoFile.createFSharp
+                (directoryName </> "AssemblyInfo.fs")
+                attributes
+        | Csproj ->
+            AssemblyInfoFile.createCSharp
+                (directoryName </> "Properties" </> "AssemblyInfo.cs")
+                attributes)
+
+Target.create "appveyor" ignore
+
+"Clean"
+==> "Build"
+==> "CopyBuildOutput"
+==> "Publish"
+==> "Zip"
+==> "Release"
+==> "appveyor"
+
+"UpdateAssemblyInfo" ?=> "Build"
+"UpdateAssemblyInfo" ==> "appveyor"
 
 Target.runOrDefault "CopyBuildOutput"

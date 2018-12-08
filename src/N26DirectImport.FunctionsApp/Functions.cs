@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
 using Microsoft.Azure.WebJobs.Extensions.Storage;
@@ -128,5 +129,13 @@ namespace N26DirectImport.FunctionsApp
             log.LogInformation($"Retrieved balance at: {DateTime.Now}");
             return balance.ToString();
         }
+
+        [FunctionName("GetVersion")]
+        public static string GetVersion(
+            [HttpTrigger(
+                AuthorizationLevel.Function,
+                "get",
+                Route = null)] HttpRequest req) =>
+                Assembly.GetExecutingAssembly().GetName().Version.ToString();
     }
 }
