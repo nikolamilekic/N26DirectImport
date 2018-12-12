@@ -165,10 +165,10 @@ let private update ynabHeaders toUpdate =
         )
         |> ignore)
 
-let private delete ynabHeaders toDelete =
+let private delete ynabHeaders (toDelete : TransactionModel list) =
     toDelete
-    |> Seq.map (fun id ->
-        id.ToString(),
+    |> Seq.map (fun t ->
+        t.Id.ToString(),
         (("flag_color", JsonValue.String "red")
         |> Array.singleton
         |> JsonValue.Record
