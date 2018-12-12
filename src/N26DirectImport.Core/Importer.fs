@@ -8,6 +8,7 @@ open Microsoft.WindowsAzure.Storage.Table
 type Binding() =
     inherit TableEntity()
     member val Ynab = "" with get, set
+    member val VisibleTs = 0L with get, set
 
 let private getChangeSet
     ynabHeaders
@@ -36,10 +37,10 @@ let private getChangeSet
         let rec retrieveBindings token results =
             TableQuery<Binding>()
                 .Where(
-                    TableQuery.GenerateFilterCondition(
-                        "PartitionKey",
+                    TableQuery.GenerateFilterConditionForLong(
+                        "VisibleTs",
                         QueryComparisons.GreaterThanOrEqual,
-                        from.ToUnixTimeMilliseconds().ToString()))
+                        from.ToUnixTimeMilliseconds()))
             |> fun q -> bindingsTable.ExecuteQuerySegmentedAsync(q, token).Result
             |> fun segment ->
                 let newResults = segment.Results::results
@@ -48,7 +49,7 @@ let private getChangeSet
 
         retrieveBindings null []
         |> Seq.collect id
-        |> Seq.map (fun b -> b.RowKey, b.Ynab)
+        |> Seq.map (fun b -> Guid(b.RowKey), b.Ynab)
         |> Map.ofSeq
 
     let ynabToN26 =
@@ -59,7 +60,7 @@ let private getChangeSet
 
     let n26TransactionsToConsider =
         N26.getTransactions n26Headers from ``to``
-        |> Seq.map (fun nt -> nt.VisibleTs.ToString(), nt)
+        |> Seq.map (fun nt -> nt.Id, nt)
         |> Map.ofSeq
 
     let ynabOrphans =
@@ -72,38 +73,38 @@ let private getChangeSet
            | Some ntk -> Map.containsKey ntk n26TransactionsToConsider |> not)
         |> List.ofSeq
 
-    let (transactionsToAdd, transactionsToUpdate) =
+    let (transactionsToAdd, transactionsToUpdate, transactionsToBind) =
         n26TransactionsToConsider
         |> Map.toSeq
         |> Seq.map snd
         |> Seq.fold
-            (fun (toAdd, toUpdate) nt ->
+            (fun (toAdd, toUpdate, toBind) nt ->
                 let yto =
-                    Map.tryFind (nt.VisibleTs.ToString()) n26ToYnab
+                    Map.tryFind nt.Id n26ToYnab
                     |> Option.bind
                         (fun key -> Map.tryFind key ynabTransactionsToConsider)
                 match yto with
                 | Some yt when yt.Cleared <> Reconciled ->
-                    toAdd, (nt, yt, false)::toUpdate
-                | Some _ -> toAdd, toUpdate
+                    toAdd, (nt, yt)::toUpdate, toBind
+                | Some _ -> toAdd, toUpdate, toBind
                 | None ->
                     let orphan =
                         ynabOrphans
                         |> List.tryFind (fun yt ->
-                            yt.Cleared <> Reconciled &&
                             yt.Amount = Some nt.Amount &&
-
+                            yt.Cleared <> Reconciled &&
                             toUpdate
-                            |> List.exists (fun (_, y, _) -> yt = y)
+                            |> List.exists (fun (_, y) -> yt = y)
                             |> not)
                     match orphan with
-                    | None -> nt::toAdd, toUpdate
-                    | Some orphan -> toAdd, (nt, orphan, true)::toUpdate)
-            ([], [])
+                    | None -> nt::toAdd, toUpdate, toBind
+                    | Some orphan ->
+                        toAdd, (nt, orphan)::toUpdate, (nt, orphan)::toBind)
+            ([], [], [])
 
     let ynabTransactionsToUpdate =
         transactionsToUpdate
-        |> Seq.map (fun (_, yt, _) -> yt)
+        |> Seq.map (fun (_, yt) -> yt)
         |> Set.ofSeq
 
     let transactionsToDelete =
@@ -120,10 +121,12 @@ let private getChangeSet
         nt, Rules.applyAddRules initial nt),
 
     transactionsToUpdate
-    |> List.map (fun (nt, original, rebind) ->
-        nt, original, Rules.applyUpdateRules original nt, rebind),
+    |> List.map (fun (nt, original) ->
+        nt, original, Rules.applyUpdateRules original nt),
 
-    transactionsToDelete
+    transactionsToDelete,
+
+    transactionsToBind
 
 let private add ynabHeaders toAdd =
     if Seq.isEmpty toAdd then [||] else
@@ -146,7 +149,7 @@ let private add ynabHeaders toAdd =
 let private update ynabHeaders toUpdate =
     let updates =
         toUpdate
-        |> Seq.map (fun (_, original, updated, _) ->
+        |> Seq.map (fun (_, original, updated) ->
             Ynab.getUpdateTransaction original updated
             |> Option.map (fun t -> original, updated, t))
         |> Seq.onlySome
@@ -189,7 +192,7 @@ type Facade(ynabKey, n26Username, n26Password, n26Token) =
     member __.RunAsync bindings = async {
         let now = DateTimeOffset.Now
         let n26Headers = N26.makeHeaders n26Username n26Password n26Token
-        let toAdd, toUpdate, toDelete =
+        let toAdd, toUpdate, toDelete, toBind =
             getChangeSet ynabHeaders n26Headers bindings now
 
         let newYnabTransactions = add ynabHeaders toAdd
@@ -203,27 +206,40 @@ type Facade(ynabKey, n26Username, n26Password, n26Token) =
                 yield!
                     Seq.zip toAdd newYnabTransactions
                     |> Seq.map (fun ((nt, _), y) ->
-                        nt.VisibleTs.ToString(), y.Id.String.Value)
+                        let partition =
+                            y.Date
+                            |> Option.map (fun d -> d.DayOfWeek)
+                            |> Option.defaultValue DayOfWeek.Monday
+                        nt.Id, nt.VisibleTs, y.Id.String.Value, partition)
 
                 yield!
-                    toUpdate
-                    |> Seq.where (fun (_, _, _, rebind) -> rebind)
-                    |> Seq.map (fun (nt, yt, _, _) ->
-                        nt.VisibleTs.ToString(), yt.Id)
+                    toBind
+                    |> Seq.map (fun (nt, yt) ->
+                        nt.Id, nt.VisibleTs, yt.Id, yt.Date.DayOfWeek)
             }
-            |> Seq.map (fun (ntk, ytk) ->
-                Binding(RowKey = ntk, Ynab = ytk, PartitionKey = "Binding")
-                |> TableOperation.InsertOrReplace)
-            |> Seq.toArray
-            |> fun oss -> async {
-                if oss |> Array.isEmpty then return () else
-                let batch = TableBatchOperation()
-                for os in oss do batch.Add(os)
-                return!
-                    bindings.ExecuteBatchAsync(batch)
-                    |> Async.AwaitTask
-                    |> Async.Ignore
-            }
+            |> Seq.groupBy (fun (_, _, _, p) -> p)
+            |> Seq.map snd
+            |> Seq.map (fun currentPartition ->
+                currentPartition
+                |> Seq.map (fun (ntk, visibleTs, ytk, partition) ->
+                    Binding(
+                        RowKey = ntk.ToString(),
+                        Ynab = ytk,
+                        VisibleTs = visibleTs,
+                        PartitionKey = partition.ToString())
+                    |> TableOperation.InsertOrReplace)
+                |> Seq.toArray
+                |> fun oss -> async {
+                    if oss |> Array.isEmpty then return () else
+                    let batch = TableBatchOperation()
+                    for os in oss do batch.Add(os)
+                    return!
+                        bindings.ExecuteBatchAsync(batch)
+                        |> Async.AwaitTask
+                        |> Async.Ignore
+                })
+            |> Async.Parallel
+            |> Async.Ignore
 
         return accountInfo.BankBalance
     }
