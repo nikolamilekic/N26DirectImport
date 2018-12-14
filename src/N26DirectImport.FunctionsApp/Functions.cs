@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Azure.WebJobs;
@@ -10,7 +12,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.WindowsAzure.Storage;
 using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
-
 using Microsoft.Azure.WebJobs.Extensions.Http;
 using Microsoft.AspNetCore.Http;
 
@@ -110,9 +111,50 @@ namespace N26DirectImport.FunctionsApp
             var now = DateTime.Now;
             var fileName = now.ToString("yyyy-MM-ddTHH-mm-ss") + ".json";
             var blob = backups.GetBlockBlobReference(fileName);
+            await blob.SetStandardBlobTierAsync(StandardBlobTier.Cool);
             await blob.UploadTextAsync(transactions);
 
             log.LogInformation($"Backed-up Ynab at: {DateTime.Now}");
+        }
+
+        [FunctionName("RemoveOldBackups")]
+        public static async Task RemoveOldBackups(
+            [TimerTrigger("0 0 0 * * 1")]TimerInfo myTimer,
+            [Blob(
+                "backups",
+                FileAccess.ReadWrite,
+                Connection = "AzureWebJobsStorage" )] CloudBlobContainer backups,
+            ILogger log,
+            ExecutionContext context)
+        {
+            async Task<List<IEnumerable<IListBlobItem>>> GetBlobs()
+            {
+                var results = new List<IEnumerable<IListBlobItem>>();
+                BlobContinuationToken nextToken = null;
+                do
+                {
+                    var currentSegment =
+                        await backups.ListBlobsSegmentedAsync(nextToken);
+                    nextToken = currentSegment.ContinuationToken;
+                    results.Add(currentSegment.Results);
+                } while ( nextToken != null);
+                return results;
+            }
+
+            var oneMonthAgo = DateTime.UtcNow.Subtract(TimeSpan.FromDays(30));
+            var blobLists = await GetBlobs();
+            var staleBlobs =
+                blobLists
+                    .SelectMany(e => e)
+                    .Cast<CloudBlockBlob>()
+                    .Where(b => b.Properties.Created < oneMonthAgo);
+
+            foreach (var b in staleBlobs)
+            {
+                await b.DeleteAsync();
+            }
+
+            log.LogInformation($"Removed old Ynab backups at: {DateTime.Now}");
         }
 
         [FunctionName("GetBalance")]
