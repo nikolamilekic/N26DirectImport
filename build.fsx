@@ -19,7 +19,7 @@ open FSharp.Data
 
 let productName = "N26DirectImport"
 let solution = productName + ".sln"
-let binPath = "src/N26DirectImport/bin/Release/netstandard2.0"
+let binPath = "src/N26DirectImport/bin/Release/netcoreapp2.1"
 let publishPath = binPath </> "publish"
 let zipFileName = "publish.zip"
 let buildNumber = Environment.environVarOrNone "APPVEYOR_BUILD_NUMBER"
