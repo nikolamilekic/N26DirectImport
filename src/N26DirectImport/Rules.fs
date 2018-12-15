@@ -1,4 +1,4 @@
-module N26DirectImport.Core.Rules
+module N26DirectImport.Rules
 
 open System
 open FSharp.Data

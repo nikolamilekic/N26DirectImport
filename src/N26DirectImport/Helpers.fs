@@ -1,5 +1,5 @@
 [<AutoOpen>]
-module N26DirectImport.Core.Helpers
+module N26DirectImport.Helpers
 
 let curry f a b = f(a, b)
 

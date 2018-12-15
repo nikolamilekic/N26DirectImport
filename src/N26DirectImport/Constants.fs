@@ -1,4 +1,4 @@
-namespace N26DirectImport.Core
+namespace N26DirectImport
 
 open System
 

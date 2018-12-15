@@ -2,14 +2,14 @@
 namespace System
 open System.Reflection
 
-[<assembly: AssemblyTitleAttribute("N26DirectImport.Core")>]
+[<assembly: AssemblyTitleAttribute("N26DirectImport")>]
 [<assembly: AssemblyProductAttribute("N26DirectImport")>]
 [<assembly: AssemblyVersionAttribute("1.9999.0.0")>]
 [<assembly: AssemblyFileVersionAttribute("1.9999.0.0")>]
 do ()
 
 module internal AssemblyVersionInformation =
-    let [<Literal>] AssemblyTitle = "N26DirectImport.Core"
+    let [<Literal>] AssemblyTitle = "N26DirectImport"
     let [<Literal>] AssemblyProduct = "N26DirectImport"
     let [<Literal>] AssemblyVersion = "1.9999.0.0"
     let [<Literal>] AssemblyFileVersion = "1.9999.0.0"

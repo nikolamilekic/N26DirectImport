@@ -1,4 +1,4 @@
-namespace N26DirectImport.Core
+namespace N26DirectImport
 
 open System
 open FSharp.Data
@@ -18,9 +18,9 @@ module Ynab =
             (Accounts.n26.ToString())
 
     let putAndPostTransactionsEndpoint =
-            sprintf
-                "https://api.youneedabudget.com/v1/budgets/%s/transactions"
-                (Budgets.main.ToString())
+        sprintf
+            "https://api.youneedabudget.com/v1/budgets/%s/transactions"
+            (Budgets.main.ToString())
 
     let private parseCleared = function | "reconciled" -> Reconciled
                                         | "cleared" -> Cleared
@@ -39,7 +39,7 @@ module Ynab =
         }
 
     let getTransactionsString headers (since : DateTime option) =
-        Http.RequestString (
+        Http.AsyncRequestString (
             getTransactionsEndpoint,
             query =
                 (match since with
@@ -48,14 +48,17 @@ module Ynab =
             headers = headers
         )
 
-    let getTransactions headers since =
-        getTransactionsString headers since
-        |> YnabData.Parse
-        |> fun x -> x.Data.Transactions
-        |> Seq.where(fun t -> t.AccountId = Some Accounts.n26)
-        |> Seq.sortByDescending (fun yt -> yt.Date)
-        |> Seq.map makeTransactionModel
-        |> List.ofSeq
+    let getTransactions headers since = async {
+        let! transactionsString = getTransactionsString headers since
+        return
+            transactionsString
+            |> YnabData.Parse
+            |> fun x -> x.Data.Transactions
+            |> Seq.where(fun t -> t.AccountId = Some Accounts.n26)
+            |> Seq.sortByDescending (fun yt -> yt.Date)
+            |> Seq.map makeTransactionModel
+            |> List.ofSeq
+    }
 
     let private fieldMappings =
         let mapString x = x |> Option.map (fun x -> x.ToString())
