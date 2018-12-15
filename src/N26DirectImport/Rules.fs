@@ -35,6 +35,8 @@ let private rules = seq {
 
     yield!
         [
+            List.singleton "Rundfunk",
+                fun yt -> { yt with PayeeName = Some "ARD" }
             List.singleton "micro-v2-atm",
                 fun yt -> { yt with PayeeId = Some Payees.wallet }
             List.singleton "DM-Drogerie Markt",
@@ -47,7 +49,7 @@ let private rules = seq {
                 fun yt -> { yt with PayeeId = Some Payees.volksbank }
             List.singleton "Uber",
                 fun yt -> { yt with PayeeName = Some "Uber" }
-            List.singleton "Amazon",
+            [ "Amazon"; "AMZN" ],
                 fun yt -> { yt with PayeeName = Some "Amazon" }
             List.singleton "APOTHEKE",
                 fun yt -> { yt with PayeeName = Some "Pharmacy" }
