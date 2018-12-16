@@ -22,7 +22,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Helpers.fs" />
     <Compile Include="Constants.fs" />
     <Compile Include="Transaction.fs" />
     <Compile Include="Ynab.fs" />

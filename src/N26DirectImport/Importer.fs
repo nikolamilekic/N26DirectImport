@@ -3,6 +3,7 @@ module N26DirectImport.Importer
 open System
 open FSharp.Data
 open Microsoft.WindowsAzure.Storage.Table
+open Milekic.YoLo
 
 type Binding() =
     inherit TableEntity()

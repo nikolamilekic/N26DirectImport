@@ -2,6 +2,7 @@ namespace N26DirectImport
 
 open System
 open FSharp.Data
+open Milekic.YoLo
 
 type YnabData = JsonProvider<"Samples/YnabData.json">
 
