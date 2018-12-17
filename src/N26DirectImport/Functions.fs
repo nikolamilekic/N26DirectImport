@@ -114,12 +114,12 @@ let backup
         let now = DateTime.Now
         let fileName = now.ToString("yyyy-MM-ddTHH-mm-ss") + ".json"
         let blob = backups.GetBlockBlobReference(fileName)
+        do! blob.UploadTextAsync(transactions) |> Async.AwaitTask
         do!
             blob.SetStandardBlobTierAsync(StandardBlobTier.Cool)
             |> Async.AwaitTask
-        do! blob.UploadTextAsync(transactions) |> Async.AwaitTask
 
-        log.LogInformation(sprintf "Updated Ynab manually at %A" DateTime.Now)
+        log.LogInformation(sprintf "Made a Ynab backup at %A" DateTime.Now)
     }
     |> Async.StartAsTask :> Task
 
