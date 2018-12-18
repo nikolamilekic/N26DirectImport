@@ -242,5 +242,10 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
             AccessCondition.GenerateLeaseCondition(lease))
         |> Async.AwaitTask
 
-    return newBalance
+    let bindingsCount = Map.count newBindings
+    return
+        sprintf
+            "Cleared balance: %M\nBindings count: %i"
+            newBalance
+            bindingsCount
 }
