@@ -48,10 +48,11 @@ let update
         [<Config>] config,
         [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
         [<Blob("info/balance", FileAccess.ReadWrite)>] balance,
+        [<Blob("info/lastReconciliation", FileAccess.ReadWrite)>] lastReconciliation,
         (log : ILogger)
     ) =
     async {
-        let! _ = Importer.run config bindings balance
+        let! _ = Importer.run config bindings balance lastReconciliation
 
         log.LogInformation
         <| sprintf "Updated Ynab automatically at %A" DateTime.Now
@@ -66,10 +67,11 @@ let triggerUpdate
         [<Config>] config,
         [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
         [<Blob("info/balance", FileAccess.ReadWrite)>] balance,
+        [<Blob("info/lastReconciliation", FileAccess.ReadWrite)>] lastReconciliation,
         (log : ILogger)
     ) =
     async {
-        let! newBalance = Importer.run config bindings balance
+        let! newBalance = Importer.run config bindings balance lastReconciliation
 
         log.LogInformation
         <| sprintf "Updated Ynab manually at %A" DateTime.Now

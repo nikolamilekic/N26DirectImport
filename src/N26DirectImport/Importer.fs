@@ -9,19 +9,25 @@ open Microsoft.WindowsAzure.Storage
 
 let serializer = FsPickler.CreateJsonSerializer()
 
-let private getChangeSet ynabHeaders n26Headers n26ToYnab = async {
+let private getChangeSet
+    ynabHeaders n26Headers n26ToYnab (lastReconciliation : DateTimeOffset) = async {
     let now = DateTimeOffset.Now
-    let twoMonthsPrior = (now - TimeSpan.FromDays 60.0)
+
+    let backSpan = TimeSpan.FromDays 30.0
 
     let! ynabTransactions =
-        Ynab.getTransactions ynabHeaders (Some twoMonthsPrior.DateTime)
+        Ynab.getTransactions
+            ynabHeaders
+            (Some (lastReconciliation.DateTime - backSpan))
 
-    let from =
+    let reconciliation =
         ynabTransactions
         |> Seq.where (fun yt -> yt.Cleared <> Reconciled)
         |> Seq.tryLast
         |> Option.defaultWith (fun () -> ynabTransactions |> Seq.head)
-        |> (fun yt -> (yt.Date - TimeSpan.FromDays 1.0) |> DateTimeOffset)
+        |> fun yt -> yt.Date |> DateTimeOffset
+
+    let from = reconciliation - TimeSpan.FromDays 30.0
 
     let ynabTransactionsToConsider =
         ynabTransactions
@@ -72,7 +78,6 @@ let private getChangeSet ynabHeaders n26Headers n26ToYnab = async {
                         ynabOrphans
                         |> List.tryFind (fun yt ->
                             yt.Amount = Some nt.Amount &&
-                            yt.Cleared <> Reconciled &&
                             toUpdate
                             |> List.exists (fun (_, y) -> yt = y)
                             |> not)
@@ -80,7 +85,11 @@ let private getChangeSet ynabHeaders n26Headers n26ToYnab = async {
                     | None -> nt::toAdd, toUpdate, bindings
                     | Some orphan ->
                         toAdd,
-                        (nt, orphan)::toUpdate,
+                        (
+                            if orphan.Cleared <> Reconciled
+                            then (nt, orphan)::toUpdate
+                            else toUpdate
+                        ),
                         Map.add nt.Id (orphan.Id, nt.VisibleTs) bindings)
             ([], [], n26ToYnab)
 
@@ -111,7 +120,9 @@ let private getChangeSet ynabHeaders n26Headers n26ToYnab = async {
         transactionsToDelete,
 
         newBindings
-        |> Map.filter (fun _ (_, visibleTs) -> visibleTs >= fromInUnixMs)
+        |> Map.filter (fun _ (_, visibleTs) -> visibleTs >= fromInUnixMs),
+
+        reconciliation
 }
 
 let private add ynabHeaders toAdd = async {
@@ -178,7 +189,12 @@ type Config = {
     N26Token : string
 }
 
-let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
+let run
+    config
+    (bindings : CloudBlockBlob)
+    (balance : CloudBlockBlob)
+    (lastReconciliation : CloudBlockBlob) = async {
+
     let! leaser =
         TimeSpan.FromSeconds(20.0)
         |> Some
@@ -201,8 +217,13 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
     let! bindingsStream = bindings.OpenReadAsync() |> Async.AwaitTask
     let oldBindings = serializer.Deserialize bindingsStream
 
-    let! toAdd, toUpdate, toDelete, newBindings =
-        getChangeSet ynabHeaders n26Headers oldBindings
+    let! oldReconciliation = async {
+        let! stream = lastReconciliation.OpenReadAsync() |> Async.AwaitTask
+        return serializer.Deserialize stream
+    }
+
+    let! toAdd, toUpdate, toDelete, newBindings, newReconciliation =
+        getChangeSet ynabHeaders n26Headers oldBindings oldReconciliation
 
     let! updateDeleteJobs =
         [
@@ -230,6 +251,12 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
             bindings.UploadFromByteArrayAsync (pickled, 0, pickled.Length)
             |> Async.AwaitTask
 
+    if oldReconciliation <> newReconciliation then
+        let pickled = serializer.Pickle newReconciliation
+        do!
+            lastReconciliation.UploadFromByteArrayAsync (pickled, 0, pickled.Length)
+            |> Async.AwaitTask
+
     do! updateDeleteJobs
 
     let! newBalance = balanceRetriever
@@ -239,7 +266,7 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
 
     do!
         bindings.ReleaseLeaseAsync(
-            AccessCondition.GenerateLeaseCondition(lease))
+           AccessCondition.GenerateLeaseCondition(lease))
         |> Async.AwaitTask
 
     let bindingsCount = Map.count newBindings
