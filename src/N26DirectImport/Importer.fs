@@ -2,21 +2,17 @@ module N26DirectImport.Importer
 
 open System
 open FSharp.Data
-open Microsoft.WindowsAzure.Storage.Table
 open Milekic.YoLo
+open MBrace.FsPickler.Json
+open Microsoft.WindowsAzure.Storage.Blob
+open Microsoft.WindowsAzure.Storage
 
-type Binding() =
-    inherit TableEntity()
-    member val Ynab = "" with get, set
-    member val VisibleTs = 0L with get, set
+let serializer = FsPickler.CreateJsonSerializer()
 
-let private getChangeSet
-    ynabHeaders
-    n26Headers
-    (bindingsTable : CloudTable)
-    (``to`` : DateTimeOffset) = async {
+let private getChangeSet ynabHeaders n26Headers n26ToYnab = async {
+    let now = DateTimeOffset.Now
+    let twoMonthsPrior = (now - TimeSpan.FromDays 60.0)
 
-    let twoMonthsPrior = (``to`` - TimeSpan.FromDays 60.0)
     let! ynabTransactions =
         Ynab.getTransactions ynabHeaders (Some twoMonthsPrior.DateTime)
 
@@ -27,43 +23,6 @@ let private getChangeSet
         |> Option.defaultWith (fun () -> ynabTransactions |> Seq.head)
         |> (fun yt -> (yt.Date - TimeSpan.FromDays 1.0) |> DateTimeOffset)
 
-    let! mappingsRetriever =
-        let rec retrieveBindings results token = async {
-            let query =
-                TableQuery<Binding>()
-                    .Where(
-                        TableQuery.GenerateFilterConditionForLong(
-                            "VisibleTs",
-                            QueryComparisons.GreaterThanOrEqual,
-                            from.ToUnixTimeMilliseconds()))
-            let! segment =
-                bindingsTable.ExecuteQuerySegmentedAsync(query, token)
-                |> Async.AwaitTask
-
-            let results = segment.Results::results
-            let token = segment.ContinuationToken
-
-            if isNull token |> not
-            then return! retrieveBindings results token
-            else
-                return
-                    results
-                    |> Seq.collect id
-                    |> Seq.map (fun b -> Guid(b.RowKey), b.Ynab)
-                    |> Map.ofSeq
-        }
-
-        async {
-            let! n26ToYnab = retrieveBindings [] null
-            let ynabToN26 =
-                n26ToYnab
-                |> Map.toSeq
-                |> Seq.map (fun (ntk, ytk) -> ytk, ntk)
-                |> Map.ofSeq
-            return (n26ToYnab, ynabToN26)
-        }
-        |> Async.StartChild
-
     let ynabTransactionsToConsider =
         ynabTransactions
         |> Seq.where (fun yt -> (DateTimeOffset yt.Date) >= from)
@@ -71,14 +30,18 @@ let private getChangeSet
         |> Map.ofSeq
 
     let! n26TransactionsToConsider = async {
-        let! x = N26.getTransactions n26Headers from ``to``
+        let! x = N26.getTransactions n26Headers from now
         return
             x
             |> Seq.map (fun nt -> nt.Id, nt)
             |> Map.ofSeq
     }
 
-    let! n26ToYnab, ynabToN26 = mappingsRetriever
+    let ynabToN26 =
+        n26ToYnab
+        |> Map.toSeq
+        |> Seq.map (fun (ntk, (ytk, _)) -> ytk, ntk)
+        |> Map.ofSeq
 
     let ynabOrphans =
         ynabTransactionsToConsider
@@ -90,20 +53,20 @@ let private getChangeSet
            | Some ntk -> Map.containsKey ntk n26TransactionsToConsider |> not)
         |> List.ofSeq
 
-    let (transactionsToAdd, transactionsToUpdate, transactionsToBind) =
+    let (transactionsToAdd, transactionsToUpdate, newBindings) =
         n26TransactionsToConsider
         |> Map.toSeq
         |> Seq.map snd
         |> Seq.fold
-            (fun (toAdd, toUpdate, toBind) nt ->
+            (fun (toAdd, toUpdate, bindings) nt ->
                 let yto =
                     Map.tryFind nt.Id n26ToYnab
-                    |> Option.bind
-                        (fun key -> Map.tryFind key ynabTransactionsToConsider)
+                    |> Option.bind (fun (key, _) ->
+                        Map.tryFind key ynabTransactionsToConsider)
                 match yto with
                 | Some yt when yt.Cleared <> Reconciled ->
-                    toAdd, (nt, yt)::toUpdate, toBind
-                | Some _ -> toAdd, toUpdate, toBind
+                    toAdd, (nt, yt)::toUpdate, bindings
+                | Some _ -> toAdd, toUpdate, bindings
                 | None ->
                     let orphan =
                         ynabOrphans
@@ -114,10 +77,12 @@ let private getChangeSet
                             |> List.exists (fun (_, y) -> yt = y)
                             |> not)
                     match orphan with
-                    | None -> nt::toAdd, toUpdate, toBind
+                    | None -> nt::toAdd, toUpdate, bindings
                     | Some orphan ->
-                        toAdd, (nt, orphan)::toUpdate, (nt, orphan)::toBind)
-            ([], [], [])
+                        toAdd,
+                        (nt, orphan)::toUpdate,
+                        Map.add nt.Id (orphan.Id, nt.VisibleTs) bindings)
+            ([], [], n26ToYnab)
 
     let ynabTransactionsToUpdate =
         transactionsToUpdate
@@ -131,6 +96,7 @@ let private getChangeSet
             Set.contains o ynabTransactionsToUpdate |> not &&
             Map.containsKey o.Id ynabToN26)
 
+    let fromInUnixMs = from.ToUnixTimeMilliseconds()
     return
         transactionsToAdd
         |> List.map (fun nt ->
@@ -144,7 +110,8 @@ let private getChangeSet
 
         transactionsToDelete,
 
-        transactionsToBind
+        newBindings
+        |> Map.filter (fun _ (_, visibleTs) -> visibleTs >= fromInUnixMs)
 }
 
 let private add ynabHeaders toAdd = async {
@@ -204,12 +171,38 @@ let private delete ynabHeaders (toDelete : TransactionModel list) =
     |> Async.Parallel
     |> Async.Ignore
 
-let run ynabKey n26Username n26Password n26Token bindings = async {
-    let ynabHeaders = Ynab.makeHeaders ynabKey
-    let now = DateTimeOffset.Now
-    let! n26Headers = N26.makeHeaders n26Username n26Password n26Token
-    let! toAdd, toUpdate, toDelete, toBind =
-        getChangeSet ynabHeaders n26Headers bindings now
+type Config = {
+    YnabKey : string
+    N26Username : string
+    N26Password : string
+    N26Token : string
+}
+
+let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
+    let! leaser =
+        TimeSpan.FromSeconds(20.0)
+        |> Some
+        |> Option.toNullable
+        |> bindings.AcquireLeaseAsync
+        |> Async.AwaitTask
+        |> Async.StartChild
+
+    let! n26Headers =
+        N26.makeHeaders config.N26Username config.N26Password config.N26Token
+    let ynabHeaders = Ynab.makeHeaders config.YnabKey
+
+    let! balanceRetriever =
+        async {
+            let! accountInfo = N26.getAccountInfo n26Headers
+            return accountInfo.BankBalance
+        }
+        |> Async.StartChild
+
+    let! bindingsStream = bindings.OpenReadAsync() |> Async.AwaitTask
+    let oldBindings = serializer.Deserialize bindingsStream
+
+    let! toAdd, toUpdate, toDelete, newBindings =
+        getChangeSet ynabHeaders n26Headers oldBindings
 
     let! updateDeleteJobs =
         [
@@ -220,50 +213,34 @@ let run ynabKey n26Username n26Password n26Token bindings = async {
         |> Async.Ignore
         |> Async.StartChild
 
-    let! accountInfoRetriever = N26.getAccountInfo n26Headers |> Async.StartChild
-
     let! newYnabTransactions = add ynabHeaders toAdd
 
-    do!
-        seq {
-            yield!
-                Seq.zip toAdd newYnabTransactions
-                |> Seq.map (fun ((nt, _), y) ->
-                    let partition =
-                        y.Date
-                        |> Option.map (fun d -> d.DayOfWeek)
-                        |> Option.defaultValue DayOfWeek.Monday
-                    nt.Id, nt.VisibleTs, y.Id.String.Value, partition)
+    let newBindings =
+        Seq.zip toAdd newYnabTransactions
+        |> Seq.fold
+            (fun bindings ((nt, _), y) ->
+                Map.add nt.Id (y.Id.String.Value, nt.VisibleTs) bindings)
+            newBindings
 
-            yield!
-                toBind
-                |> Seq.map (fun (nt, yt) ->
-                    nt.Id, nt.VisibleTs, yt.Id, yt.Date.DayOfWeek)
-        }
-        |> Seq.groupBy (fun (_, _, _, p) -> p)
-        |> Seq.map (fun (_, currentPartition) ->
-            currentPartition
-            |> Seq.map (fun (ntk, visibleTs, ytk, partition) ->
-                Binding(
-                    RowKey = ntk.ToString(),
-                    Ynab = ytk,
-                    VisibleTs = visibleTs,
-                    PartitionKey = partition.ToString())
-                |> TableOperation.InsertOrReplace)
-            |> Seq.toArray
-            |> fun oss -> async {
-                if oss |> Array.isEmpty then return () else
-                let batch = TableBatchOperation()
-                for os in oss do batch.Add(os)
-                return!
-                    bindings.ExecuteBatchAsync(batch)
-                    |> Async.AwaitTask
-                    |> Async.Ignore
-            })
-        |> Async.Parallel
-        |> Async.Ignore
+    let! lease = leaser
+
+    if oldBindings <> newBindings then
+        let pickled = serializer.Pickle newBindings
+        do!
+            bindings.UploadFromByteArrayAsync (pickled, 0, pickled.Length)
+            |> Async.AwaitTask
 
     do! updateDeleteJobs
-    let! accountInfo = accountInfoRetriever
-    return accountInfo.BankBalance
+
+    let! newBalance = balanceRetriever
+    do!
+        balance.UploadTextAsync (newBalance.ToString())
+        |> Async.AwaitTask
+
+    do!
+        bindings.ReleaseLeaseAsync(
+            AccessCondition.GenerateLeaseCondition(lease))
+        |> Async.AwaitTask
+
+    return newBalance
 }

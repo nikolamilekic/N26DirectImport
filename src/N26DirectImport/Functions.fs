@@ -19,15 +19,8 @@ open Microsoft.Azure.WebJobs.Description
 [<Binding>]
 type ConfigAttribute() = inherit Attribute()
 
-type Config = {
-    YnabKey : string
-    N26Username : string
-    N26Password : string
-    N26Token : string
-}
-
 type ConfigProvider(configuration : IConfiguration) =
-    let config = {
+    let config : Importer.Config = {
         YnabKey = configuration.["YnabKey"]
         N26Username = configuration.["N26Username"]
         N26Password = configuration.["N26Password"]
@@ -48,32 +41,17 @@ type Startup() =
 [<assembly: WebJobsStartup(typedefof<Startup>)>]
 do ()
 
-let runUpdate bindings (info : CloudBlobContainer) config = async {
-    let! newBalance =
-        Importer.run
-            config.YnabKey
-            config.N26Username
-            config.N26Password
-            config.N26Token
-            bindings
-
-    let blob = info.GetBlockBlobReference "balance"
-    do! blob.UploadTextAsync (newBalance.ToString()) |> Async.AwaitTask
-
-    return newBalance
-}
-
 [<FunctionName("Update")>]
 let update
     (
         [<TimerTrigger("0 */10 * * * *")>] (timerInfo : TimerInfo),
-        [<Table("Transactions")>] bindings,
-        [<Blob("info")>] info,
         [<Config>] config,
+        [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
+        [<Blob("info/balance", FileAccess.ReadWrite)>] balance,
         (log : ILogger)
     ) =
     async {
-        let! _ = runUpdate bindings info config
+        let! _ = Importer.run config bindings balance
 
         log.LogInformation
         <| sprintf "Updated Ynab automatically at %A" DateTime.Now
@@ -85,13 +63,13 @@ let triggerUpdate
     (
         [<HttpTrigger(AuthorizationLevel.Function, "get")>]
             (request : HttpRequest),
-        [<Table("Transactions")>] bindings,
-        [<Blob("info")>] info,
         [<Config>] config,
+        [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
+        [<Blob("info/balance", FileAccess.ReadWrite)>] balance,
         (log : ILogger)
     ) =
     async {
-        let! newBalance = runUpdate bindings info config
+        let! newBalance = Importer.run config bindings balance
 
         log.LogInformation
         <| sprintf "Updated Ynab manually at %A" DateTime.Now
@@ -104,8 +82,8 @@ let triggerUpdate
 let backup
     (
         [<TimerTrigger("0 2 0 * * *")>] (timerInfo : TimerInfo),
+        [<Config>] (config : Importer.Config),
         [<Blob("backups", FileAccess.ReadWrite)>] (backups : CloudBlobContainer),
-        [<Config>] config,
         (log : ILogger)
     ) =
     async {
