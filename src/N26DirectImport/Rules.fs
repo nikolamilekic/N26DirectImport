@@ -4,7 +4,7 @@ open System
 open FSharp.Data
 open Milekic.YoLo
 
-let private typesToClear = [ "PT"; "DT"; "CT"; "DD"; "AV" ]
+let private typesToClear = [ "PT"; "DT"; "CT"; "DD"; "AV"; "PF" ]
 
 let private makeMetadata (nt : N26Transactions.Transaction) =
     [
