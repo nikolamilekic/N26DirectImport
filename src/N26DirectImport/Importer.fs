@@ -248,7 +248,13 @@ let run
     if oldBindings <> newBindings then
         let pickled = serializer.Pickle newBindings
         do!
-            bindings.UploadFromByteArrayAsync (pickled, 0, pickled.Length)
+            bindings.UploadFromByteArrayAsync(
+                pickled,
+                0,
+                pickled.Length,
+                AccessCondition.GenerateLeaseCondition(lease),
+                null,
+                null)
             |> Async.AwaitTask
 
     if oldReconciliation <> newReconciliation then
