@@ -126,7 +126,10 @@ let private getChangeSet
 }
 
 let private add ynabHeaders toAdd = async {
-    if Seq.isEmpty toAdd then return [||] else
+    if Seq.isEmpty toAdd then return List.empty else
+
+    let sortKey t = t.Amount, t.Memo
+    let toAddSorted = Seq.sortBy (snd >> sortKey) toAdd
 
     let! result =
         toAdd
@@ -142,7 +145,15 @@ let private add ynabHeaders toAdd = async {
 
     match result.Body with
     | Binary _ -> return failwith "Unexpected YNAB response"
-    | Text s -> return (YnabData.Parse s).Data.Transactions
+    | Text s ->
+        let added =
+            (YnabData.Parse s).Data.Transactions
+            |> Seq.map Ynab.makeTransactionModel
+            |> Seq.sortBy sortKey
+        return
+            Seq.zip toAddSorted added
+            |> Seq.map (fun ((nt, _), yt) -> nt, yt)
+            |> List.ofSeq
 }
 
 let private update ynabHeaders toUpdate =
@@ -234,13 +245,13 @@ let run
         |> Async.Ignore
         |> Async.StartChild
 
-    let! newYnabTransactions = add ynabHeaders toAdd
+    let! added = add ynabHeaders toAdd
 
     let newBindings =
-        Seq.zip toAdd newYnabTransactions
+        added
         |> Seq.fold
-            (fun bindings ((nt, _), y) ->
-                Map.add nt.Id (y.Id.String.Value, nt.VisibleTs) bindings)
+            (fun bindings (nt, yt) ->
+                Map.add nt.Id (yt.Id, nt.VisibleTs) bindings)
             newBindings
 
     let! lease = leaser

@@ -27,7 +27,7 @@ module Ynab =
                                         | "cleared" -> Cleared
                                         | _ -> Uncleared
 
-    let private makeTransactionModel (yt : YnabData.Transaction) =
+    let makeTransactionModel (yt : YnabData.Transaction) =
         {
             Id = yt.Id.String.Value
             PayeeId = None
@@ -93,8 +93,7 @@ module Ynab =
     let getUpdateTransaction original updated =
         fieldMappings
         |> Seq.map (fun (k, vf) -> k, vf original, vf updated)
-        |> Seq.where (fun (k, original, updated) ->
-            k <> "import_id" && original <> updated)
+        |> Seq.where (fun (k, original, updated) -> original <> updated)
         |> Seq.map (fun (k, _, v) ->
             let vs = match v with | Some x -> x | None -> "" in k, vs)
         |> Seq.toList
