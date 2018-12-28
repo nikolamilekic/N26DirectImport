@@ -77,7 +77,14 @@ let private getChangeSet
                     let orphan =
                         ynabOrphans
                         |> List.tryFind (fun yt ->
-                            yt.Amount = Some nt.Amount &&
+                            (
+                                yt.Amount = Some nt.Amount ||
+
+                                nt.OriginalCurrency <> Some "EUR" &&
+                                yt.Amount.IsSome &&
+                                Math.Abs(1m - nt.Amount / yt.Amount.Value) < 0.02m
+                            ) &&
+
                             toUpdate
                             |> List.exists (fun (_, y) -> yt = y)
                             |> not)

@@ -110,4 +110,5 @@ let applyUpdateRules yt nt =
             Date = afterRules.Date
             Memo = afterRules.Memo
             Cleared = afterRules.Cleared
+            Amount = afterRules.Amount
     }
