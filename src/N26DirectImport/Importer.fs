@@ -46,7 +46,12 @@ let private getChangeSet
     let ynabToN26 =
         n26ToYnab
         |> Map.toSeq
-        |> Seq.map (fun (ntk, (ytk, _)) -> ytk, ntk)
+        |> Seq.groupBy (fun (_, (y, _)) -> y)
+        |> Seq.map (fun (_, ts) ->
+            ts
+            |> Seq.sortByDescending (snd >> snd)
+            |> Seq.head
+            |> fun (ntk, (ytk, _)) -> ytk, ntk)
         |> Map.ofSeq
 
     let ynabOrphans =
