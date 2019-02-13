@@ -50,6 +50,8 @@ let private rules = seq {
                 fun yt -> { yt with PayeeId = Some Payees.volksbank }
             List.singleton "Uber",
                 fun yt -> { yt with PayeeName = Some "Uber" }
+            List.singleton "www.appcargo.com",
+                fun yt -> { yt with PayeeName = Some "Car:Go" }
             [ "Amazon"; "AMZN" ],
                 fun yt -> { yt with PayeeName = Some "Amazon" }
             List.singleton "APOTHEKE",
@@ -68,6 +70,8 @@ let private rules = seq {
             ], fun yt -> { yt with PayeeName = Some "Restaurant" }
             List.singleton "BACKBLAZE",
                 fun yt -> { yt with PayeeName = Some "Backblaze" }
+            List.singleton "MSFT",
+                fun yt -> { yt with PayeeName = Some "Microsoft" }
             List.singleton "Adobe",
                 fun yt ->
                     { yt with
