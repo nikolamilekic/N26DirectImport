@@ -59,6 +59,7 @@ let private getChangeSet
         |> Map.toSeq
         |> Seq.map snd
         |> Seq.where (fun yt ->
+           yt.Cleared <> Reconciled &&
            match Map.tryFind yt.Id ynabToN26 with
            | None -> true
            | Some ntk -> Map.containsKey ntk n26TransactionsToConsider |> not)
@@ -97,11 +98,7 @@ let private getChangeSet
                     | None -> nt::toAdd, toUpdate, bindings
                     | Some orphan ->
                         toAdd,
-                        (
-                            if orphan.Cleared <> Reconciled
-                            then (nt, orphan)::toUpdate
-                            else toUpdate
-                        ),
+                        (nt, orphan)::toUpdate,
                         Map.add nt.Id (orphan.Id, nt.VisibleTs) bindings)
             ([], [], n26ToYnab)
 
@@ -113,7 +110,6 @@ let private getChangeSet
     let transactionsToDelete =
         ynabOrphans
         |> List.where (fun o ->
-            o.Cleared <> Reconciled &&
             Set.contains o ynabTransactionsToUpdate |> not &&
             Map.containsKey o.Id ynabToN26)
 
