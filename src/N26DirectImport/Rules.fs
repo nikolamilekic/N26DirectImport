@@ -52,6 +52,8 @@ let private rules = seq {
                 fun yt -> { yt with PayeeName = Some "Uber" }
             List.singleton "www.appcargo.com",
                 fun yt -> { yt with PayeeName = Some "Car:Go" }
+            List.singleton "JAVNI PREVOZ",
+                fun yt -> { yt with PayeeName = Some "BusPlus" }
             [ "Amazon"; "AMZN" ],
                 fun yt -> { yt with PayeeName = Some "Amazon" }
             List.singleton "APOTHEKE",
