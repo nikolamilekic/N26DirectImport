@@ -8,6 +8,11 @@ open Microsoft.WindowsAzure.Storage.Blob
 open Microsoft.WindowsAzure.Storage
 
 let serializer = FsPickler.CreateJsonSerializer()
+let deserializeBlob (blob : CloudBlockBlob) = async {
+    let! stream = blob.OpenReadAsync() |> Async.AwaitTask
+    let! bytes = stream.AsyncRead <| int stream.Length
+    return serializer.UnPickle bytes
+}
 
 let private getChangeSet
     ynabHeaders n26Headers n26ToYnab (lastReconciliation : DateTimeOffset) = async {
@@ -233,13 +238,8 @@ let run
         }
         |> Async.StartChild
 
-    let! bindingsStream = bindings.OpenReadAsync() |> Async.AwaitTask
-    let oldBindings = serializer.Deserialize bindingsStream
-
-    let! oldReconciliation = async {
-        let! stream = lastReconciliation.OpenReadAsync() |> Async.AwaitTask
-        return serializer.Deserialize stream
-    }
+    let! oldBindings = deserializeBlob bindings
+    let! oldReconciliation = deserializeBlob lastReconciliation
 
     let! toAdd, toUpdate, toDelete, newBindings, newReconciliation =
         getChangeSet ynabHeaders n26Headers oldBindings oldReconciliation
