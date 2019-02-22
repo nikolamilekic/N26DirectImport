@@ -19,8 +19,15 @@ open Microsoft.Azure.WebJobs.Description
 [<Binding>]
 type ConfigAttribute() = inherit Attribute()
 
+type Config = {
+    YnabKey : string
+    N26Username : string
+    N26Password : string
+    N26Token : string
+}
+
 type ConfigProvider(configuration : IConfiguration) =
-    let config : Importer.Config = {
+    let config = {
         YnabKey = configuration.["YnabKey"]
         N26Username = configuration.["N26Username"]
         N26Password = configuration.["N26Password"]
@@ -41,17 +48,22 @@ type Startup() =
 [<assembly: WebJobsStartup(typedefof<Startup>)>]
 do ()
 
+let makeN26Headers config =
+    N26.makeHeaders config.N26Username config.N26Password config.N26Token
+let makeYnabHeaders config = Ynab.makeHeaders config.YnabKey
+
 [<FunctionName("Update")>]
 let update
     (
         [<TimerTrigger("0 */10 * * * *")>] (timerInfo : TimerInfo),
         [<Config>] config,
         [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
-        [<Blob("info/balance", FileAccess.ReadWrite)>] balance,
         (log : ILogger)
     ) =
     async {
-        let! _ = Importer.run config bindings balance
+        let! n26Headers = makeN26Headers config
+        let ynabHeaders = makeYnabHeaders config
+        let! _ = Importer.run n26Headers ynabHeaders bindings
 
         log.LogInformation
         <| sprintf "Updated Ynab automatically at %A" DateTime.Now
@@ -65,16 +77,22 @@ let triggerUpdate
             (request : HttpRequest),
         [<Config>] config,
         [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
-        [<Blob("info/balance", FileAccess.ReadWrite)>] balance,
         (log : ILogger)
     ) =
     async {
-        let! newBalance = Importer.run config bindings balance
+        let! n26Headers = makeN26Headers config
+        let ynabHeaders = makeYnabHeaders config
+        let! bindingsCount = Importer.run n26Headers ynabHeaders bindings
+        let! accountInfo = N26.getAccountInfo n26Headers
 
         log.LogInformation
         <| sprintf "Updated Ynab manually at %A" DateTime.Now
 
-        return newBalance
+        return
+            sprintf
+                "Cleared balance: %M\nBindings count: %i"
+                (accountInfo.BankBalance)
+                bindingsCount
     }
     |> Async.StartAsTask
 
@@ -82,7 +100,7 @@ let triggerUpdate
 let backup
     (
         [<TimerTrigger("0 2 0 * * *")>] (timerInfo : TimerInfo),
-        [<Config>] (config : Importer.Config),
+        [<Config>] config,
         [<Blob("backups", FileAccess.ReadWrite)>] (backups : CloudBlobContainer),
         (log : ILogger)
     ) =
@@ -135,17 +153,6 @@ let removeOldBackups
         log.LogInformation(sprintf "Removed old Ynab backups at %A" DateTime.Now)
     }
     |> Async.StartAsTask :> Task
-
-[<FunctionName("GetBalance")>]
-let getBalance
-    (
-        [<HttpTrigger(AuthorizationLevel.Function, "get")>]
-            (request : HttpRequest),
-        [<Blob("info/balance")>] (balance : string),
-        (log : ILogger)
-    ) =
-    log.LogInformation(sprintf "Retrieved balance at: %A" (DateTime.Now))
-    balance
 
 [<FunctionName("GetVersion")>]
 let getVersion

@@ -18,7 +18,7 @@ let private getChangeSet
     ynabHeaders n26Headers n26ToYnab (from : DateTimeOffset) ``to`` = async {
 
     let! ynabRetriever =
-        async{
+        async {
             let! ts = Ynab.getTransactions ynabHeaders (Some from.Date)
             return
                 ts
@@ -193,14 +193,7 @@ let private delete ynabHeaders (toDelete : TransactionModel list) =
     |> Async.Parallel
     |> Async.Ignore
 
-type Config = {
-    YnabKey : string
-    N26Username : string
-    N26Password : string
-    N26Token : string
-}
-
-let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
+let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
     let! leaser =
         TimeSpan.FromSeconds(20.0)
         |> Some
@@ -209,21 +202,12 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
         |> Async.AwaitTask
         |> Async.StartChild
 
-    let! n26Headers =
-        N26.makeHeaders config.N26Username config.N26Password config.N26Token
-    let ynabHeaders = Ynab.makeHeaders config.YnabKey
-
-    let! balanceRetriever =
-        async {
-            let! accountInfo = N26.getAccountInfo n26Headers
-            return accountInfo.BankBalance
-        }
-        |> Async.StartChild
-
     let! oldBindings = deserializeBlob bindings
 
     let ``to`` = DateTimeOffset.Now
     let from =
+        if Map.isEmpty oldBindings then DateTimeOffset(``to``.Date) else
+
         let x = ``to``.AddMonths(-2)
         let startOfThreeMonthWindow =
             DateTimeOffset(x.Year, x.Month, 1, 0, 0, 0, x.Offset)
@@ -233,6 +217,7 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
             |> Seq.map (snd >> snd)
             |> Seq.min
             |> DateTimeOffset.FromUnixTimeMilliseconds
+            |> fun d -> DateTimeOffset(d.Date)
         if oldestBinding > startOfThreeMonthWindow
         then oldestBinding else startOfThreeMonthWindow
 
@@ -275,20 +260,10 @@ let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
 
     do! updateDeleteJobs
 
-    let! newBalance = balanceRetriever
-    do!
-        balance.UploadTextAsync (newBalance.ToString())
-        |> Async.AwaitTask
-
     do!
         bindings.ReleaseLeaseAsync(
            AccessCondition.GenerateLeaseCondition(lease))
         |> Async.AwaitTask
 
-    let bindingsCount = Map.count newBindings
-    return
-        sprintf
-            "Cleared balance: %M\nBindings count: %i"
-            newBalance
-            bindingsCount
+    return Map.count newBindings
 }
