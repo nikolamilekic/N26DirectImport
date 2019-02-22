@@ -128,7 +128,12 @@ let private getChangeSet
 
         transactionsToDelete,
         newBindings,
+
         ynabOrphans
+        |> List.where (fun yt ->
+            transactionsToUpdate
+            |> List.exists (fun (_, y) -> yt = y)
+            |> not)
 }
 
 let private add ynabHeaders toAdd = async {
