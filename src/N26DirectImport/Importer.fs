@@ -14,6 +14,11 @@ let deserializeBlob (blob : CloudBlockBlob) = async {
     return serializer.UnPickle bytes
 }
 
+type Info = {
+    BindingsCount : int
+    Orphans : TransactionModel list
+}
+
 let private getChangeSet
     ynabHeaders n26Headers n26ToYnab (from : DateTimeOffset) ``to`` = async {
 
@@ -122,7 +127,8 @@ let private getChangeSet
             nt, original, Rules.applyUpdateRules original nt),
 
         transactionsToDelete,
-        newBindings
+        newBindings,
+        ynabOrphans
 }
 
 let private add ynabHeaders toAdd = async {
@@ -221,7 +227,7 @@ let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
         if oldestBinding > startOfThreeMonthWindow
         then oldestBinding else startOfThreeMonthWindow
 
-    let! toAdd, toUpdate, toDelete, newBindings =
+    let! toAdd, toUpdate, toDelete, newBindings, orphans =
         getChangeSet ynabHeaders n26Headers oldBindings from ``to``
 
     let! updateDeleteJobs =
@@ -265,5 +271,5 @@ let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
            AccessCondition.GenerateLeaseCondition(lease))
         |> Async.AwaitTask
 
-    return Map.count newBindings
+    return { BindingsCount = Map.count newBindings; Orphans = orphans }
 }

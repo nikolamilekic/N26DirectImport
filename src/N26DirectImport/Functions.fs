@@ -82,7 +82,7 @@ let triggerUpdate
     async {
         let! n26Headers = makeN26Headers config
         let ynabHeaders = makeYnabHeaders config
-        let! bindingsCount = Importer.run n26Headers ynabHeaders bindings
+        let! info = Importer.run n26Headers ynabHeaders bindings
         let! accountInfo = N26.getAccountInfo n26Headers
 
         log.LogInformation
@@ -90,9 +90,9 @@ let triggerUpdate
 
         return
             sprintf
-                "Cleared balance: %M\nBindings count: %i"
+                "Cleared balance: %M\nInfo:\n%A"
                 (accountInfo.BankBalance)
-                bindingsCount
+                info
     }
     |> Async.StartAsTask
 
