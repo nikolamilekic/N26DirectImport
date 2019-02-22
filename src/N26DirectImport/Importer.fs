@@ -15,38 +15,27 @@ let deserializeBlob (blob : CloudBlockBlob) = async {
 }
 
 let private getChangeSet
-    ynabHeaders n26Headers n26ToYnab (lastReconciliation : DateTimeOffset) = async {
-    let now = DateTimeOffset.Now
+    ynabHeaders n26Headers n26ToYnab (from : DateTimeOffset) ``to`` = async {
 
-    let backSpan = TimeSpan.FromDays 30.0
+    let! ynabRetriever =
+        async{
+            let! ts = Ynab.getTransactions ynabHeaders (Some from.Date)
+            return
+                ts
+                |> Seq.map (fun yt -> yt.Id, yt)
+                |> Map.ofSeq
+        }
+        |> Async.StartChild
 
-    let! ynabTransactions =
-        Ynab.getTransactions
-            ynabHeaders
-            (Some (lastReconciliation.DateTime - backSpan))
-
-    let reconciliation =
-        ynabTransactions
-        |> Seq.where (fun yt -> yt.Cleared <> Reconciled)
-        |> Seq.tryLast
-        |> Option.defaultWith (fun () -> ynabTransactions |> Seq.head)
-        |> fun yt -> yt.Date |> DateTimeOffset
-
-    let from = reconciliation - TimeSpan.FromDays 30.0
-
-    let ynabTransactionsToConsider =
-        ynabTransactions
-        |> Seq.where (fun yt -> (DateTimeOffset yt.Date) >= from)
-        |> Seq.map (fun yt -> yt.Id, yt)
-        |> Map.ofSeq
-
-    let! n26TransactionsToConsider = async {
-        let! x = N26.getTransactions n26Headers from now
-        return
-            x
-            |> Seq.map (fun nt -> nt.Id, nt)
-            |> Map.ofSeq
-    }
+    let! n26Retriever =
+        async {
+            let! x = N26.getTransactions n26Headers from ``to``
+            return
+                x
+                |> Seq.map (fun nt -> nt.Id, nt)
+                |> Map.ofSeq
+        }
+        |> Async.StartChild
 
     let ynabToN26 =
         n26ToYnab
@@ -58,6 +47,9 @@ let private getChangeSet
             |> Seq.head
             |> fun (ntk, (ytk, _)) -> ytk, ntk)
         |> Map.ofSeq
+
+    let! ynabTransactionsToConsider = ynabRetriever
+    let! n26TransactionsToConsider = n26Retriever
 
     let ynabOrphans =
         ynabTransactionsToConsider
@@ -118,7 +110,6 @@ let private getChangeSet
             Set.contains o ynabTransactionsToUpdate |> not &&
             Map.containsKey o.Id ynabToN26)
 
-    let fromInUnixMs = from.ToUnixTimeMilliseconds()
     return
         transactionsToAdd
         |> List.map (fun nt ->
@@ -131,11 +122,7 @@ let private getChangeSet
             nt, original, Rules.applyUpdateRules original nt),
 
         transactionsToDelete,
-
         newBindings
-        |> Map.filter (fun _ (_, visibleTs) -> visibleTs >= fromInUnixMs),
-
-        reconciliation
 }
 
 let private add ynabHeaders toAdd = async {
@@ -213,12 +200,7 @@ type Config = {
     N26Token : string
 }
 
-let run
-    config
-    (bindings : CloudBlockBlob)
-    (balance : CloudBlockBlob)
-    (lastReconciliation : CloudBlockBlob) = async {
-
+let run config (bindings : CloudBlockBlob) (balance : CloudBlockBlob) = async {
     let! leaser =
         TimeSpan.FromSeconds(20.0)
         |> Some
@@ -239,10 +221,23 @@ let run
         |> Async.StartChild
 
     let! oldBindings = deserializeBlob bindings
-    let! oldReconciliation = deserializeBlob lastReconciliation
 
-    let! toAdd, toUpdate, toDelete, newBindings, newReconciliation =
-        getChangeSet ynabHeaders n26Headers oldBindings oldReconciliation
+    let ``to`` = DateTimeOffset.Now
+    let from =
+        let x = ``to``.AddMonths(-2)
+        let startOfThreeMonthWindow =
+            DateTimeOffset(x.Year, x.Month, 1, 0, 0, 0, x.Offset)
+        let oldestBinding =
+            oldBindings
+            |> Map.toSeq
+            |> Seq.map (snd >> snd)
+            |> Seq.min
+            |> DateTimeOffset.FromUnixTimeMilliseconds
+        if oldestBinding > startOfThreeMonthWindow
+        then oldestBinding else startOfThreeMonthWindow
+
+    let! toAdd, toUpdate, toDelete, newBindings =
+        getChangeSet ynabHeaders n26Headers oldBindings from ``to``
 
     let! updateDeleteJobs =
         [
@@ -255,12 +250,14 @@ let run
 
     let! added = add ynabHeaders toAdd
 
+    let fromInUnixMs = from.ToUnixTimeMilliseconds()
     let newBindings =
         added
         |> Seq.fold
             (fun bindings (nt, yt) ->
                 Map.add nt.Id (yt.Id, nt.VisibleTs) bindings)
             newBindings
+        |> Map.filter (fun _ (_, visibleTs) -> visibleTs >= fromInUnixMs)
 
     let! lease = leaser
 
@@ -274,12 +271,6 @@ let run
                 AccessCondition.GenerateLeaseCondition(lease),
                 null,
                 null)
-            |> Async.AwaitTask
-
-    if oldReconciliation <> newReconciliation then
-        let pickled = serializer.Pickle newReconciliation
-        do!
-            lastReconciliation.UploadFromByteArrayAsync (pickled, 0, pickled.Length)
             |> Async.AwaitTask
 
     do! updateDeleteJobs
