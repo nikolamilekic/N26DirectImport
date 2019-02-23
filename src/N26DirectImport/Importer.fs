@@ -45,12 +45,7 @@ let private getChangeSet
     let ynabToN26 =
         n26ToYnab
         |> Map.toSeq
-        |> Seq.groupBy (fun (_, (y, _)) -> y)
-        |> Seq.map (fun (_, ts) ->
-            ts
-            |> Seq.sortByDescending (snd >> snd)
-            |> Seq.head
-            |> fun (ntk, (ytk, _)) -> ytk, ntk)
+        |> Seq.map (fun (ntk, (ytk, _)) -> ytk, ntk)
         |> Map.ofSeq
 
     let! ynabTransactionsToConsider = ynabRetriever
@@ -73,14 +68,16 @@ let private getChangeSet
         |> Seq.map snd
         |> Seq.fold
             (fun (toAdd, toUpdate, bindings) nt ->
+                let addBinding (nt : N26Transactions.Transaction) yt =
+                    Map.add nt.Id (yt.Id, nt.VisibleTs) bindings
                 let yto =
                     Map.tryFind nt.Id n26ToYnab
                     |> Option.bind (fun (key, _) ->
                         Map.tryFind key ynabTransactionsToConsider)
                 match yto with
                 | Some yt when yt.Cleared <> Reconciled ->
-                    toAdd, (nt, yt)::toUpdate, bindings
-                | Some _ -> toAdd, toUpdate, bindings
+                    toAdd, (nt, yt)::toUpdate, addBinding nt yt
+                | Some yt -> toAdd, toUpdate, addBinding nt yt
                 | None ->
                     let orphan =
                         ynabOrphans
@@ -99,10 +96,8 @@ let private getChangeSet
                     match orphan with
                     | None -> nt::toAdd, toUpdate, bindings
                     | Some orphan ->
-                        toAdd,
-                        (nt, orphan)::toUpdate,
-                        Map.add nt.Id (orphan.Id, nt.VisibleTs) bindings)
-            ([], [], n26ToYnab)
+                        toAdd, (nt, orphan)::toUpdate, addBinding nt orphan)
+            ([], [], Map.empty)
 
     let ynabTransactionsToUpdate =
         transactionsToUpdate
@@ -246,14 +241,12 @@ let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
 
     let! added = add ynabHeaders toAdd
 
-    let fromInUnixMs = from.ToUnixTimeMilliseconds()
     let newBindings =
         added
         |> Seq.fold
             (fun bindings (nt, yt) ->
                 Map.add nt.Id (yt.Id, nt.VisibleTs) bindings)
             newBindings
-        |> Map.filter (fun _ (_, visibleTs) -> visibleTs >= fromInUnixMs)
 
     let! lease = leaser
 
