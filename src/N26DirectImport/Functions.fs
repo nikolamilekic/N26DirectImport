@@ -117,6 +117,7 @@ let triggerUpdate
     async {
         let! n26Headers = makeN26Headers config
         let ynabHeaders = makeYnabHeaders config
+        bindingsCache <- None
         let! info =
             runWithBindings log bindings (Importer.run n26Headers ynabHeaders)
         let! accountInfo = N26.getAccountInfo n26Headers
