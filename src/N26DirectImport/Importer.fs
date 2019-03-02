@@ -3,16 +3,6 @@ module N26DirectImport.Importer
 open System
 open FSharp.Data
 open Milekic.YoLo
-open MBrace.FsPickler.Json
-open Microsoft.WindowsAzure.Storage.Blob
-open Microsoft.WindowsAzure.Storage
-
-let serializer = FsPickler.CreateJsonSerializer()
-let deserializeBlob (blob : CloudBlockBlob) = async {
-    let! stream = blob.OpenReadAsync() |> Async.AwaitTask
-    let! bytes = stream.AsyncRead <| int stream.Length
-    return serializer.UnPickle bytes
-}
 
 type Info = {
     BindingsCount : int
@@ -199,26 +189,16 @@ let private delete ynabHeaders (toDelete : TransactionModel list) =
     |> Async.Parallel
     |> Async.Ignore
 
-let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
-    let! leaser =
-        TimeSpan.FromSeconds(20.0)
-        |> Some
-        |> Option.toNullable
-        |> bindings.AcquireLeaseAsync
-        |> Async.AwaitTask
-        |> Async.StartChild
-
-    let! oldBindings = deserializeBlob bindings
-
+let run n26Headers ynabHeaders bindings = async {
     let ``to`` = DateTimeOffset.Now
     let from =
-        if Map.isEmpty oldBindings then DateTimeOffset(``to``.Date) else
+        if Map.isEmpty bindings then DateTimeOffset(``to``.Date) else
 
         let x = ``to``.AddMonths(-2)
         let startOfThreeMonthWindow =
             DateTimeOffset(x.Year, x.Month, 1, 0, 0, 0, x.Offset)
         let oldestBinding =
-            oldBindings
+            bindings
             |> Map.toSeq
             |> Seq.map (snd >> snd)
             |> Seq.min
@@ -228,7 +208,7 @@ let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
         then oldestBinding else startOfThreeMonthWindow
 
     let! toAdd, toUpdate, toDelete, newBindings, orphans =
-        getChangeSet ynabHeaders n26Headers oldBindings from ``to``
+        getChangeSet ynabHeaders n26Headers bindings from ``to``
 
     let! updateDeleteJobs =
         [
@@ -248,26 +228,9 @@ let run n26Headers ynabHeaders (bindings : CloudBlockBlob) = async {
                 Map.add nt.Id (yt.Id, nt.VisibleTs) bindings)
             newBindings
 
-    let! lease = leaser
-
-    if oldBindings <> newBindings then
-        let pickled = serializer.Pickle newBindings
-        do!
-            bindings.UploadFromByteArrayAsync(
-                pickled,
-                0,
-                pickled.Length,
-                AccessCondition.GenerateLeaseCondition(lease),
-                null,
-                null)
-            |> Async.AwaitTask
-
     do! updateDeleteJobs
 
-    do!
-        bindings.ReleaseLeaseAsync(
-           AccessCondition.GenerateLeaseCondition(lease))
-        |> Async.AwaitTask
-
-    return { BindingsCount = Map.count newBindings; Orphans = orphans }
+    return
+        { BindingsCount = Map.count newBindings; Orphans = orphans },
+        newBindings
 }
