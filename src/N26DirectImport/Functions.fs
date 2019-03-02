@@ -27,6 +27,7 @@ type Config = {
     N26Username : string
     N26Password : string
     N26Token : string
+    Storage : string
 }
 
 type ConfigProvider(configuration : IConfiguration) =
@@ -35,6 +36,7 @@ type ConfigProvider(configuration : IConfiguration) =
         N26Username = configuration.["N26Username"]
         N26Password = configuration.["N26Password"]
         N26Token = configuration.["N26Token"]
+        Storage = configuration.["AzureWebJobsStorage"]
     }
     interface IExtensionConfigProvider with
         member __.Initialize context =
@@ -63,7 +65,14 @@ let deserializeBlob (blob : CloudBlockBlob) = async {
 }
 
 let mutable bindingsCache = None
-let runWithBindings (log : ILogger) (bindingsBlob : CloudBlockBlob) f = async {
+let runWithBindings (log : ILogger) config f = async {
+    let bindingsBlob =
+        lazy
+        let account = config.Storage |> CloudStorageAccount.Parse
+        let client = account.CreateCloudBlobClient()
+        let container = client.GetContainerReference("info")
+        container.GetBlockBlobReference("bindings")
+
     let! bindings = async {
         match bindingsCache with
         | Some b ->
@@ -71,7 +80,7 @@ let runWithBindings (log : ILogger) (bindingsBlob : CloudBlockBlob) f = async {
             return b
         | None ->
             log.LogInformation "Bindings cache empty. Retrieving bindings."
-            return! deserializeBlob bindingsBlob
+            return! deserializeBlob (bindingsBlob.Force())
     }
 
     let! result, newBindings = f bindings
@@ -79,26 +88,24 @@ let runWithBindings (log : ILogger) (bindingsBlob : CloudBlockBlob) f = async {
     if bindings <> newBindings then
         let pickled = serializer.Pickle newBindings
         do!
-            bindingsBlob.UploadFromByteArrayAsync(pickled, 0, pickled.Length)
+            bindingsBlob.Force().UploadFromByteArrayAsync(pickled, 0, pickled.Length)
             |> Async.AwaitTask
 
     bindingsCache <- Some newBindings
     return result
 }
 
-
 [<FunctionName("Update")>]
 let update
     (
         [<TimerTrigger("0 */10 * * * *")>] (timerInfo : TimerInfo),
         [<Config>] config,
-        [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
         log
     ) =
     async {
         let! n26Headers = makeN26Headers config
         let ynabHeaders = makeYnabHeaders config
-        let! _ = runWithBindings log bindings (Importer.run n26Headers ynabHeaders)
+        let! _ = runWithBindings log config (Importer.run n26Headers ynabHeaders)
 
         log.LogInformation
         <| sprintf "Updated Ynab automatically at %A" DateTime.Now
@@ -111,7 +118,6 @@ let triggerUpdate
         [<HttpTrigger(AuthorizationLevel.Function, "get")>]
             (request : HttpRequest),
         [<Config>] config,
-        [<Blob("info/bindings", FileAccess.ReadWrite)>] bindings,
         log
     ) =
     async {
@@ -119,7 +125,7 @@ let triggerUpdate
         let ynabHeaders = makeYnabHeaders config
         bindingsCache <- None
         let! info =
-            runWithBindings log bindings (Importer.run n26Headers ynabHeaders)
+            runWithBindings log config (Importer.run n26Headers ynabHeaders)
         let! accountInfo = N26.getAccountInfo n26Headers
 
         log.LogInformation
