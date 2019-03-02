@@ -132,64 +132,6 @@ let triggerUpdate
     }
     |> Async.StartAsTask
 
-[<FunctionName("Backup")>]
-let backup
-    (
-        [<TimerTrigger("0 2 0 * * *")>] (timerInfo : TimerInfo),
-        [<Config>] config,
-        [<Blob("backups", FileAccess.ReadWrite)>] (backups : CloudBlobContainer),
-        (log : ILogger)
-    ) =
-    async {
-        let headers = Ynab.makeHeaders config.YnabKey
-        let! transactions = Ynab.getTransactionsString headers None
-        let now = DateTime.Now
-        let fileName = now.ToString("yyyy-MM-ddTHH-mm-ss") + ".json"
-        let blob = backups.GetBlockBlobReference(fileName)
-        do! blob.UploadTextAsync(transactions) |> Async.AwaitTask
-        do!
-            blob.SetStandardBlobTierAsync(StandardBlobTier.Cool)
-            |> Async.AwaitTask
-
-        log.LogInformation(sprintf "Made a Ynab backup at %A" DateTime.Now)
-    }
-    |> Async.StartAsTask :> Task
-
-let getBlobs (container : CloudBlobContainer) =
-    let rec inner results token = async {
-        let! next = container.ListBlobsSegmentedAsync token |> Async.AwaitTask
-        let results = next.Results::results
-        if isNull next.ContinuationToken
-        then return results |> Seq.collect id
-        else return! inner results token
-    }
-    inner [] null
-
-[<FunctionName("RemoveOldBackups")>]
-let removeOldBackups
-    (
-        [<TimerTrigger("0 0 0 * * 1")>] (timerInfo : TimerInfo),
-        [<Blob("backups", FileAccess.ReadWrite)>] backups,
-        (log : ILogger)
-    ) =
-    async {
-        let oneMonthAgo = DateTimeOffset.UtcNow.Subtract(TimeSpan.FromDays(30.0))
-        let! blobLists = getBlobs backups
-        do!
-            blobLists
-            |> Seq.cast<CloudBlockBlob>
-            |> Seq.where (fun b ->
-                match b.Properties.Created |> Option.ofNullable with
-                | None -> false
-                | Some c -> c < oneMonthAgo)
-            |> Seq.map (fun b -> b.DeleteAsync() |> Async.AwaitTask)
-            |> Async.Parallel
-            |> Async.Ignore
-
-        log.LogInformation(sprintf "Removed old Ynab backups at %A" DateTime.Now)
-    }
-    |> Async.StartAsTask :> Task
-
 [<FunctionName("GetVersion")>]
 let getVersion
     (
