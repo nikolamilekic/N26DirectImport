@@ -4,6 +4,7 @@ nuget Fake.DotNet.Cli
 nuget Fake.IO.Zip
 nuget Fake.DotNet.AssemblyInfoFile
 nuget FSharp.Data
+nuget Argu
 nuget FSharp.Core //"
 #load "./.fake/build.fsx/intellisense.fsx"
 
@@ -16,13 +17,26 @@ open Fake.IO
 open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
 open FSharp.Data
+open Argu
+
+type Argument =
+    | [<CustomAppSettings("APPVEYOR_BUILD_NUMBER")>] BuildNumber of int
+    | [<CustomAppSettings("AzureDeploymentToken")>] AzureDeploymentToken of string
+with interface IArgParserTemplate with member __.Usage = " "
+
+let arguments =
+    ArgumentParser
+        .Create()
+        .Parse(
+            ignoreUnrecognized = true,
+            configurationReader = ConfigurationReader.FromEnvironmentVariables())
 
 let productName = "N26DirectImport"
 let solution = productName + ".sln"
 let binPath = "src/N26DirectImport/bin/Release/netcoreapp2.1"
 let publishPath = binPath </> "publish"
 let zipFileName = "publish.zip"
-let buildNumber = Environment.environVarOrNone "APPVEYOR_BUILD_NUMBER"
+let buildNumber = arguments.GetResult(BuildNumber, defaultValue = 9999)
 
 Target.create "Clean" <| fun _ ->
     Seq.allPairs [|"src"|] [|"bin"; "obj"|]
@@ -48,7 +62,7 @@ Target.create "Release" <| fun _ ->
             headers =
                 [
                     "Authorization",
-                        "Basic " + (Environment.environVarOrFail "AzureDeploymentToken")
+                        "Basic " + (arguments.GetResult AzureDeploymentToken)
                 ],
             httpMethod = HttpMethod.Post,
             body = body
@@ -62,7 +76,7 @@ Target.create "UpdateAssemblyInfo" <| fun _ ->
         | f when f.EndsWith("csproj") -> Csproj
         | _ -> failwith (sprintf "Project file %s not supported. Unknown project type." projectFileName)
 
-    let version = buildNumber |> Option.defaultValue "9999" |> sprintf "1.%s.0.0"
+    let version = sprintf "1.%i.0.0" buildNumber
     !! "src/**/*.??proj"
     |> Seq.iter (fun projectPath ->
         let projectName = Path.GetFileNameWithoutExtension projectPath
@@ -96,4 +110,4 @@ Target.create "appveyor" ignore
 "UpdateAssemblyInfo" ?=> "Build"
 "UpdateAssemblyInfo" ==> "appveyor"
 
-Target.runOrDefault "CopyBuildOutput"
+Target.runOrDefaultWithArguments "CopyBuildOutput"
