@@ -33,7 +33,6 @@ let private rules = seq {
                 Date = getDateFromN26Transaction nt
                 Amount = nt.Amount |> Some
         }
-
     yield!
         [
             List.singleton "Rundfunk",
@@ -93,7 +92,6 @@ let private rules = seq {
                                 p.InnerText().ToLower().Contains(c.ToLower())))
 
                 if not matches then yt else fs yt)
-
     yield fun yt t ->
         match yt.Memo, makeMetadata t with
         | x, "" -> x
@@ -102,12 +100,17 @@ let private rules = seq {
             Some x
         | Some x, metadata -> Some (sprintf "%s %s" x metadata)
         |> fun memo -> { yt with Memo = memo }
-
     yield fun yt _ ->
         match yt.Memo with
         | Some x when x.Length > 100 ->
             { yt with Memo = x.Substring(0, 100) |> Some }
         | _ -> yt
+    yield fun yt t ->
+        if t.PartnerName <> Some "Cash26" then yt else
+        { yt with
+            Cleared = if t.Cash26Status = Some "PAID"
+                      then Cleared else Uncleared
+            PayeeId = Some Payees.wallet }
 }
 
 let applyAddRules yt nt = Seq.fold (fun yt rule -> rule yt nt) yt rules
