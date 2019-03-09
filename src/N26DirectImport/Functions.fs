@@ -2,7 +2,6 @@
 module N26DirectImport.Functions
 
 open System
-open System.IO
 open System.Reflection
 open System.Threading.Tasks
 open Microsoft.Azure.WebJobs
@@ -15,8 +14,9 @@ open Microsoft.Azure.WebJobs.Hosting
 open Microsoft.Azure.WebJobs.Host.Config
 open Microsoft.Azure.WebJobs.Description
 open Microsoft.WindowsAzure.Storage
-
 open MBrace.FsPickler.Json
+
+let startupTime = DateTime.Now
 
 [<AttributeUsage(AttributeTargets.Parameter, AllowMultiple = true)>]
 [<Binding>]
@@ -133,7 +133,8 @@ let triggerUpdate
 
         return
             sprintf
-                "Cleared balance: %M\nInfo:\n%A"
+                "Startup time: %A\nCleared balance: %M\nInfo:\n%A"
+                startupTime
                 (accountInfo.BankBalance)
                 info
     }
