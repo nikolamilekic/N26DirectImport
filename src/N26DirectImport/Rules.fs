@@ -80,6 +80,16 @@ let private rules = seq {
                         CategoryId = Some Categories.subscriptions }
             List.singleton "Nintendo",
                 fun yt -> { yt with PayeeName = Some "Nintendo" }
+            List.singleton "micro-v2-travel-holidays",
+                fun yt ->
+                    { yt with
+                        CategoryId =
+                            yt.CategoryId
+                            |> Option.defaultValue Categories.vacation
+                            |> Some }
+            List.singleton "Center Parcs",
+                fun yt -> { yt with PayeeName = Some "Center Parcs"
+                                    CategoryId = None }
         ]
         |> Seq.map (
             fun (values, fs) yt (nt : N26Transactions.Transaction) ->
