@@ -133,8 +133,7 @@ let triggerUpdate
 
         return
             sprintf
-                "Startup time: %A\nCleared balance: %M\nInfo:\n%A"
-                startupTime
+                "Cleared balance: %M\nInfo:\n%A"
                 (accountInfo.BankBalance)
                 info
     }
@@ -146,4 +145,7 @@ let getVersion
         [<HttpTrigger(AuthorizationLevel.Function, "get")>]
             (request : HttpRequest)
     ) =
-    Assembly.GetExecutingAssembly().GetName().Version.ToString()
+    sprintf
+        "Startup time: %A\nVersion: %s"
+        startupTime
+        (Assembly.GetExecutingAssembly().GetName().Version.ToString())
