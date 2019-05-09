@@ -105,6 +105,15 @@ let private rules = seq {
 
                 if not matches then yt else fs yt)
     yield fun yt t ->
+        if List.contains t.CurrencyCode [ "RSD"; "RUB" ]
+        then
+            { yt with
+                CategoryId =
+                    yt.CategoryId
+                    |> Option.defaultValue Categories.vacation
+                    |> Some }
+        else yt
+    yield fun yt t ->
         match yt.Memo, makeMetadata t with
         | x, "" -> x
         | None, metadata -> Some metadata
