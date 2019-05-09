@@ -90,6 +90,8 @@ let private rules = seq {
             List.singleton "Center Parcs",
                 fun yt -> { yt with PayeeName = Some "Center Parcs"
                                     CategoryId = None }
+            List.singleton "EnBW AG",
+                fun yt -> { yt with PayeeName = Some "EnBW" }
         ]
         |> Seq.map (
             fun (values, fs) yt (nt : N26Transactions.Transaction) ->
