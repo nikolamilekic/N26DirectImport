@@ -13,6 +13,7 @@ type TransactionModel =
         CategoryId : Guid option
         Memo : string option
         Amount : decimal option
+        ImportId : string option
         Cleared : Cleared
     }
 
@@ -25,5 +26,6 @@ module TransactionModel =
         CategoryId = None
         Memo = None
         Amount = None
+        ImportId = None
         Cleared = Uncleared
     }

@@ -6,6 +6,13 @@ open Milekic.YoLo
 
 let private typesToClear = [ "PT"; "DT"; "CT"; "DD"; "AV"; "PF" ]
 
+let private makeImportId () =
+    [
+        "Nikola's N26 script guid"
+        Guid.NewGuid().ToString()
+    ]
+    |> curry String.Join "-"
+
 let private makeMetadata (nt : N26Transactions.Transaction) =
     [
         "Merchant: ", nt.MerchantName
@@ -28,6 +35,8 @@ let private rules = seq {
     yield fun yt (nt : N26Transactions.Transaction) ->
         {
             yt with
+                ImportId = if yt.ImportId.IsSome
+                           then yt.ImportId else makeImportId () |> Some
                 Cleared = if List.contains nt.Type typesToClear
                           then Cleared else yt.Cleared
                 Date = getDateFromN26Transaction nt
