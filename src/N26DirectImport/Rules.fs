@@ -6,12 +6,7 @@ open Milekic.YoLo
 
 let private typesToClear = [ "PT"; "DT"; "CT"; "DD"; "AV"; "PF" ]
 
-let private makeImportId () =
-    [
-        "Nikola's N26 script guid"
-        Guid.NewGuid().ToString()
-    ]
-    |> curry String.Join "-"
+let private makeImportId () = Guid.NewGuid().ToString()
 
 let private makeMetadata (nt : N26Transactions.Transaction) =
     [
