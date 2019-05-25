@@ -134,6 +134,9 @@ let private rules = seq {
             Cleared = if t.Cash26Status = Some "PAID"
                       then Cleared else Uncleared
             PayeeId = Some Payees.wallet }
+    yield fun yt t ->
+        if yt.PayeeName.IsSome || yt.PayeeId.IsSome then yt else
+        { yt with PayeeName = t.MerchantName }
 }
 
 let applyAddRules yt nt = Seq.fold (fun yt rule -> rule yt nt) yt rules
