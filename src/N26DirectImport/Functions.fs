@@ -98,7 +98,7 @@ let runWithBindings (log : ILogger) config f = async {
 [<FunctionName("Update")>]
 let update
     (
-        [<TimerTrigger("0 */10 * * * *")>] (timerInfo : TimerInfo),
+        [<TimerTrigger("0 0 * * * *")>] (timerInfo : TimerInfo),
         [<Config>] config,
         log
     ) =
