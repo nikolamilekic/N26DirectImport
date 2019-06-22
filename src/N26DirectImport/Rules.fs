@@ -111,14 +111,14 @@ let private rules = seq {
 
                 if not matches then yt else fs yt)
     yield fun yt t ->
-        if List.contains t.CurrencyCode [ "RSD"; "RUB" ]
-        then
+        match t.OriginalCurrency with
+        | Some x when List.contains x [ "RSD"; "RUB" ] ->
             { yt with
                 CategoryId =
                     yt.CategoryId
                     |> Option.defaultValue Categories.vacation
                     |> Some }
-        else yt
+        | _ -> yt
     yield fun yt t ->
         match yt.Memo, makeMetadata t with
         | x, "" -> x
