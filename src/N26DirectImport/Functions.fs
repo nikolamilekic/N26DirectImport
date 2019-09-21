@@ -2,6 +2,7 @@
 module N26DirectImport.Functions
 
 open System
+open System.IO
 open System.Reflection
 open System.Threading.Tasks
 open Microsoft.Azure.WebJobs
@@ -24,8 +25,6 @@ type ConfigAttribute() = inherit Attribute()
 
 type Config = {
     YnabKey : string
-    N26Username : string
-    N26Password : string
     N26Token : string
     Storage : string
 }
@@ -33,8 +32,6 @@ type Config = {
 type ConfigProvider(configuration : IConfiguration) =
     let config = {
         YnabKey = configuration.["YnabKey"]
-        N26Username = configuration.["N26Username"]
-        N26Password = configuration.["N26Password"]
         N26Token = configuration.["N26Token"]
         Storage = configuration.["AzureWebJobsStorage"]
     }
@@ -53,8 +50,6 @@ type Startup() =
 [<assembly: WebJobsStartup(typedefof<Startup>)>]
 do ()
 
-let makeN26Headers config =
-    N26.makeHeaders config.N26Username config.N26Password config.N26Token
 let makeYnabHeaders config = Ynab.makeHeaders config.YnabKey
 
 let serializer = FsPickler.CreateJsonSerializer()
@@ -100,11 +95,18 @@ let update
     (
         [<TimerTrigger("0 0 * * * *")>] (timerInfo : TimerInfo),
         [<Config>] config,
+        [<Blob("info/RefreshToken.txt", FileAccess.ReadWrite)>] (n26RefreshToken : CloudBlockBlob),
         log
     ) =
     async {
-        let! n26Headers = makeN26Headers config
         let ynabHeaders = makeYnabHeaders config
+        let! currentRefreshToken = n26RefreshToken.DownloadTextAsync()
+                                   |> Async.AwaitTask
+        let n26Token = N26.refreshToken config.N26Token currentRefreshToken
+        let n26Headers = N26.makeHeaders (n26Token.AccessToken.ToString())
+        do!
+            n26RefreshToken.UploadTextAsync(n26Token.RefreshToken.ToString())
+            |> Async.AwaitTask
         let! _ = runWithBindings log config (Importer.run n26Headers ynabHeaders)
 
         log.LogInformation
@@ -118,11 +120,20 @@ let triggerUpdate
         [<HttpTrigger(AuthorizationLevel.Function, "get")>]
             (request : HttpRequest),
         [<Config>] config,
+        [<Blob("info/RefreshToken.txt", FileAccess.ReadWrite)>] (n26RefreshToken : CloudBlockBlob),
         log
     ) =
     async {
-        let! n26Headers = makeN26Headers config
         let ynabHeaders = makeYnabHeaders config
+
+        let! currentRefreshToken = n26RefreshToken.DownloadTextAsync()
+                                   |> Async.AwaitTask
+        let n26Token = N26.refreshToken config.N26Token currentRefreshToken
+        let n26Headers = N26.makeHeaders (n26Token.AccessToken.ToString())
+        do!
+            n26RefreshToken.UploadTextAsync(n26Token.RefreshToken.ToString())
+            |> Async.AwaitTask
+
         bindingsCache <- None
         let! info =
             runWithBindings log config (Importer.run n26Headers ynabHeaders)

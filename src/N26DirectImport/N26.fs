@@ -8,27 +8,23 @@ type N26Token = JsonProvider<"""{"access_token":"2db29b4e-ed3a-4a6d-9628-ae0fa82
 type N26AccountInfo = JsonProvider<"""{"id":"343dde6b-de8d-4651-bb1c-59b9c9d1f9a4","availableBalance":14.47,"usableBalance":14.47,"bankBalance":55.5,"iban":"DE89100110012628266077","bic":"NTSBDEB1XXX","bankName":"N26 Bank","seized":false,"currency":"EUR","legalEntity":"EU","externalId":{"iban":"DE89100110012628266077"}}""">
 
 module N26 =
-    let makeHeaders username password token = async {
-        let! headers =
-            Http.AsyncRequestString (
-                "https://api.tech26.de/oauth/token",
-                body = (
-                    [
-                        "username", username
-                        "password", password
-                        "grant_type", "password"
-                    ] :> seq<_>
-                    |> HttpRequestBody.FormValues),
-                headers = (Seq.singleton ("Authorization", sprintf "Basic %s" token)),
-                httpMethod = "POST"
-            )
-        return
-            headers
-            |> N26Token.Parse
-            |> fun t -> t.AccessToken
-            |> sprintf "Bearer %A"
-            |> fun x -> Seq.singleton ("Authorization", x)
-    }
+    let makeHeaders =
+        sprintf "Bearer %s"
+        >> fun x -> Seq.singleton ("Authorization", x)
+
+    let refreshToken basicToken refreshToken =
+        Http.RequestString (
+            "https://api.tech26.de/oauth/token",
+            body = (
+                [
+                    "grant_type", "refresh_token"
+                    "refresh_token", refreshToken
+                ] :> seq<_>
+                |> HttpRequestBody.FormValues),
+            headers = (Seq.singleton ("Authorization", sprintf "Basic %s" basicToken)),
+            httpMethod = "POST"
+        )
+        |> N26Token.Parse
 
     let getTransactions headers (from : DateTimeOffset) (``to`` : DateTimeOffset) =
         let rec inner previous lastId = async {
