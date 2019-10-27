@@ -1,4 +1,7 @@
-@echo off
+SET TOOL_PATH=.fake
 
-dotnet restore dotnet-fake.csproj
-dotnet fake run build.fsx %*
+IF NOT EXIST "%TOOL_PATH%\fake.exe" (
+  dotnet tool install fake-cli --tool-path ./%TOOL_PATH% --version 5.*
+)
+
+"%TOOL_PATH%/fake.exe" run build.fsx -p 4 %*

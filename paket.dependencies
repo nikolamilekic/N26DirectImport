@@ -1,7 +1,24 @@
-source https://www.nuget.org/api/v2
-source https://ci.appveyor.com/nuget/milekic-yolo
+version 5.224.0
+framework: netcoreapp2.1
+storage none
+source https://api.nuget.org/v3/index.json
 
+nuget FSharp.Core
 nuget FSharp.Data
 nuget Milekic.YoLo
 nuget FsPickler
 nuget FsPickler.Json
+
+// [ FAKE GROUP ]
+group Build
+    storage none
+    source https://api.nuget.org/v3/index.json
+
+    nuget FSharp.Core
+    nuget Fake.Core.Target
+    nuget Fake.DotNet.Cli
+    nuget Fake.IO.Zip
+    nuget Fake.DotNet.AssemblyInfoFile
+    nuget Fake.DotNet.Paket
+    nuget FSharp.Data
+    nuget Argu
