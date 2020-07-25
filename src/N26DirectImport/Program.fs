@@ -40,6 +40,10 @@ let main argv =
         printfn "Headers: %A" headers
 
         0
-    with | :? ArguParseException as ex ->
-        printfn "%s" ex.Message
-        int ex.ErrorCode
+    with
+        | :? ArguParseException as ex ->
+            printfn "%s" ex.Message
+            int ex.ErrorCode
+        | x ->
+            printfn "%s" x.Message
+            -1
