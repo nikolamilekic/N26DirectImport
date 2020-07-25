@@ -18,6 +18,11 @@ type AccessToken = JsonProvider<AccessTokenSamplePath>
 
 type N26AccountInfo = JsonProvider<"""{"id":"343dde6b-de8d-4651-bb1c-59b9c9d1f9a4","availableBalance":14.47,"usableBalance":14.47,"bankBalance":55.5,"iban":"DE89100110012628266077","bic":"NTSBDEB1XXX","bankName":"N26 Bank","seized":false,"currency":"EUR","legalEntity":"EU","externalId":{"iban":"DE89100110012628266077"}}""">
 
+let authenticationHeaders = [
+    "Authorization", "Basic bXktdHJ1c3RlZC13ZHBDbGllbnQ6c2VjcmV0"
+    "device-token", "0ff70bc0-787a-4a0e-a7a3-c6efce0b92a3"
+]
+
 let getTransactions headers (from : DateTimeOffset, until : DateTimeOffset) =
     let rec inner lastId = seq {
         let current =
@@ -46,7 +51,8 @@ let getTransactions headers (from : DateTimeOffset, until : DateTimeOffset) =
     inner None
 
 let makeHeaders (username, password) = async {
-    let token = "bXktdHJ1c3RlZC13ZHBDbGllbnQ6c2VjcmV0"
+    printfn "Requesting MFA token..."
+
     let mfaResponse =
         Http.RequestString (
             "https://api.tech26.de/oauth/token",
@@ -57,11 +63,13 @@ let makeHeaders (username, password) = async {
                     "grant_type", "password"
                 ] :> seq<_>
                 |> HttpRequestBody.FormValues),
-            headers = (Seq.singleton ("Authorization", sprintf "Basic %s" token)),
+            headers = authenticationHeaders,
             httpMethod = "POST",
             silentHttpErrors = true
         )
         |> MfaTokenResponse.Parse
+
+    printfn "MFA token received. Sending MFA challenge..."
 
     Http.Request (
         "https://api.tech26.de/api/mfa/challenge",
@@ -73,13 +81,12 @@ let makeHeaders (username, password) = async {
             |> List.toArray
             |> JsonValue.Record
             |> fun r -> r.ToString() |> HttpRequestBody.TextRequest),
-        headers = [
-            "Authorization", sprintf "Basic %s" token
-            "Content-Type", "application/json"
-        ],
+        headers = authenticationHeaders @ [ "Content-Type", "application/json" ],
         httpMethod = "POST"
     )
     |> ignore
+
+    printfn "MFA challenge sent. Please approve authentication request."
 
     let timeout = DateTime.Now + TimeSpan.FromMinutes 5.0
 
@@ -94,9 +101,7 @@ let makeHeaders (username, password) = async {
                             "mfaToken", mfaResponse.MfaToken.ToString()
                         ] :> seq<_>
                         |> HttpRequestBody.FormValues),
-                    headers =
-                        Seq.singleton
-                            ("Authorization", sprintf "Basic %s" token),
+                    headers = authenticationHeaders,
                     httpMethod = "POST"
                 )
             let token = AccessToken.Parse rawToken
@@ -112,7 +117,11 @@ let makeHeaders (username, password) = async {
             else return raise e
     }
 
-    return! tryGetToken ()
+    let! result = tryGetToken ()
+
+    printfn "Authenticated."
+
+    return result
 }
 
 let getAccountInfo headers =
