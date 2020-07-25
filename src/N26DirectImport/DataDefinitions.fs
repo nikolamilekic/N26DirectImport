@@ -1,4 +1,4 @@
-module N26DirectImportCore.DataDefinitions
+module N26DirectImport.DataDefinitions
 
 open System
 open FSharp.Data

@@ -1,4 +1,4 @@
-module N26DirectImportCore.N26Api
+module N26DirectImport.N26Api
 
 open System
 open System.Net

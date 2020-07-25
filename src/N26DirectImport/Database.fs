@@ -1,4 +1,4 @@
-module N26DirectImportCore.Database
+module N26DirectImport.Database
 
 open System
 open System.Collections.Generic

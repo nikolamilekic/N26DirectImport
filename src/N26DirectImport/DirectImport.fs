@@ -1,4 +1,4 @@
-module N26DirectImportCore.DirectImport
+module N26DirectImport.DirectImport
 
 open System
 open DataDefinitions

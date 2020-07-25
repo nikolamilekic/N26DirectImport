@@ -1,4 +1,4 @@
-module N26DirectImportCore.YnabApi
+module N26DirectImport.YnabApi
 
 open FSharp.Data
 open Milekic.YoLo

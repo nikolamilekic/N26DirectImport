@@ -1,4 +1,4 @@
-module N26DirectImportCore.Definitions
+module N26DirectImport.Definitions
 
 open System
 
