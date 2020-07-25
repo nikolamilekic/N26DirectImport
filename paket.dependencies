@@ -1,13 +1,12 @@
 version 5.224.0
-framework: netcoreapp2.1
+generate_load_scripts: true
 storage none
 source https://api.nuget.org/v3/index.json
 
-nuget FSharp.Core
+nuget FSharp.Core >= 4.3.4 lowest_matching: true
 nuget FSharp.Data
 nuget Milekic.YoLo
-nuget FsPickler
-nuget FsPickler.Json
+nuget LiteDB
 
 // [ FAKE GROUP ]
 group Build
@@ -22,3 +21,6 @@ group Build
     nuget Fake.DotNet.Paket
     nuget FSharp.Data
     nuget Argu
+
+    nuget Microsoft.SourceLink.GitHub prerelease copy_local: true
+    clitool sourcelink storage: packages

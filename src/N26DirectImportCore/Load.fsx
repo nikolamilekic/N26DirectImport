@@ -1,0 +1,10 @@
+#load "../../.paket/load/net472/main.group.fsx"
+
+#load "YnabApi.fs"
+#load "N26Api.fs"
+#load "Definitions.fs"
+#load "Rules.fs"
+#load "DirectImportCore.fs"
+#load "DataDefinitions.fs"
+#load "Database.fs"
+#load "DirectImport.fs"

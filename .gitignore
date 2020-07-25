@@ -3,6 +3,7 @@
 
 *.DS_Store
 .ionide
+.paket
 
 # Azure Functions localsettings file
 local.settings.json

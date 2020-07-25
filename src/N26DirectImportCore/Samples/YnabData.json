@@ -615,8 +615,11 @@
             },
             {
                 "id": "d30cbc99-0794-43bc-b945-4dd3faef7d96",
-                "cleared": "cleared"
+                "cleared": "cleared",
+                "account_id": "b01af85d-55e0-47ec-b776-040572ac3f0f",
+                "account_name": "Leutkircher Bank"
             }
-        ]
+        ],
+        "server_knowledge": 35056
     }
 }
