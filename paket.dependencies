@@ -2,6 +2,8 @@ version 5.224.0
 storage none
 source https://api.nuget.org/v3/index.json
 
-nuget FSharp.Core >= 4.3.4 lowest_matching: true
+framework: netcoreapp3.1, netstandard2.0, netstandard2.1
+
+nuget FSharp.Core redirects:on
 nuget FSharp.Data
 nuget Milekic.YoLo
