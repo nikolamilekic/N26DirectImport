@@ -6,12 +6,6 @@
   <ItemGroup>
     <Compile Include="YnabApi.fs" />
     <Compile Include="N26Api.fs" />
-    <Compile Include="Definitions.fs" />
-    <Compile Include="Rules.fs" />
-    <Compile Include="DirectImportCore.fs" />
-    <Compile Include="DataDefinitions.fs" />
-    <Compile Include="Database.fs" />
-    <Compile Include="DirectImport.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
