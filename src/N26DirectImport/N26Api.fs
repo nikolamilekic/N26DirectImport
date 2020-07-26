@@ -96,7 +96,7 @@ let requestAccessToken (username, password) = async {
 
     printfn "MFA challenge sent. Please approve authentication request."
 
-    let timeout = DateTime.Now + TimeSpan.FromMinutes 5.0
+    let timeout = DateTime.Now + TimeSpan.FromMinutes 1.0
 
     let rec tryGetToken () = async {
         try
@@ -122,7 +122,7 @@ let requestAccessToken (username, password) = async {
             }
 
         with :? WebException as e ->
-            let waitTime = TimeSpan.FromSeconds 2.0
+            let waitTime = TimeSpan.FromSeconds 5.0
             if (DateTime.Now + waitTime) < timeout then
                 do! Async.Sleep(int waitTime.TotalMilliseconds)
                 return! tryGetToken ()
