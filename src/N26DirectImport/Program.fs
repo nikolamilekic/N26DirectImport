@@ -45,8 +45,7 @@ let main argv =
                         printfn "Reusing saved token."
                         Some t
                     else
-                        printfn "%A" t.ValidUntil
-                        printfn "Saved access token has expired."
+                        printfn "Saved access token expired on %A" t.ValidUntil
                         None
                 |> flip Option.defaultWith <| fun () ->
                     let n26UserName = arguments.GetResult N26UserName
@@ -58,9 +57,11 @@ let main argv =
                     result
             N26Api.makeHeaders accessToken
 
-        N26Api.getAccountInfo n26AuthenticationHeaders
-        |> Async.RunSynchronously
-        |> printfn "%A"
+        let from = DateTimeOffset.Now - TimeSpan.FromDays 14.0
+        let until = DateTimeOffset.Now
+
+        N26Api.getTransactions n26AuthenticationHeaders (from, until)
+        |> Seq.iter (fun x -> printfn "%s" (x.JsonValue.ToString()))
 
         0
     with
