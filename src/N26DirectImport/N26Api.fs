@@ -137,11 +137,8 @@ let requestAccessToken (username, password) = async {
 }
 
 let getAccountInfo headers =
-    async {
-        let! x =
-            Http.AsyncRequestString(
-                "https://api.tech26.de/api/accounts",
-                headers = headers
-            )
-        return N26AccountInfo.Parse x
-    }
+    Http.RequestString(
+        "https://api.tech26.de/api/accounts",
+        headers = headers
+    )
+    |> N26AccountInfo.Parse
