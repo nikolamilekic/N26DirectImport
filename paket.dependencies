@@ -8,3 +8,4 @@ nuget FSharp.Core redirects:on
 nuget FSharp.Data
 nuget Milekic.YoLo
 nuget Argu
+nuget FsPickler

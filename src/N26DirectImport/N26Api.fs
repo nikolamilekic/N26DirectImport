@@ -50,7 +50,15 @@ let getTransactions headers (from : DateTimeOffset, until : DateTimeOffset) =
 
     inner None
 
-let makeHeaders (username, password) = async {
+type N26AccessToken = {
+    Token : Guid
+    ValidUntil : DateTimeOffset
+}
+
+let makeHeaders token =
+    Seq.singleton ("Authorization", sprintf "Bearer %A" token.Token)
+
+let requestAccessToken (username, password) = async {
     printfn "Requesting MFA token..."
 
     let mfaResponse =
@@ -62,7 +70,7 @@ let makeHeaders (username, password) = async {
                     "password", password
                     "grant_type", "password"
                 ] :> seq<_>
-                |> HttpRequestBody.FormValues),
+                |> FormValues),
             headers = authenticationHeaders,
             httpMethod = "POST",
             silentHttpErrors = true
@@ -80,7 +88,7 @@ let makeHeaders (username, password) = async {
             ]
             |> List.toArray
             |> JsonValue.Record
-            |> fun r -> r.ToString() |> HttpRequestBody.TextRequest),
+            |> fun r -> r.ToString() |> TextRequest),
         headers = authenticationHeaders @ [ "Content-Type", "application/json" ],
         httpMethod = "POST"
     )
@@ -92,7 +100,7 @@ let makeHeaders (username, password) = async {
 
     let rec tryGetToken () = async {
         try
-            let! rawToken =
+            let! tokenString =
                 Http.AsyncRequestString (
                     "https://api.tech26.de/oauth/token",
                     body = (
@@ -100,14 +108,18 @@ let makeHeaders (username, password) = async {
                             "grant_type", "mfa_oob"
                             "mfaToken", mfaResponse.MfaToken.ToString()
                         ] :> seq<_>
-                        |> HttpRequestBody.FormValues),
+                        |> FormValues),
                     headers = authenticationHeaders,
                     httpMethod = "POST"
                 )
-            let token = AccessToken.Parse rawToken
-            return
-                Seq.singleton
-                    ("Authorization", sprintf "Bearer %A" token.AccessToken)
+
+            let rawToken = AccessToken.Parse tokenString
+            return {
+                Token = rawToken.AccessToken
+                ValidUntil =
+                    DateTimeOffset.Now
+                    + TimeSpan.FromSeconds (float rawToken.ExpiresIn)
+            }
 
         with :? WebException as e ->
             let waitTime = TimeSpan.FromSeconds 2.0
