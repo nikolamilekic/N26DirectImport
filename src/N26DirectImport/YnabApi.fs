@@ -7,8 +7,6 @@ open Milekic.YoLo
 let TransactionsResponseSamplePath = __SOURCE_DIRECTORY__ + "/Samples/YnabData.json"
 type TransactionsResponse = JsonProvider<TransactionsResponseSamplePath>
 
-type KnowledgeTag = NoKnowledge | Knowledge of int
-
 let makeHeaders key = [
     "Authorization", sprintf "Bearer %s" key
     "Accept", "application/json"

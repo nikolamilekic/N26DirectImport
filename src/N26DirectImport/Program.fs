@@ -5,13 +5,19 @@ open System.IO
 open Argu
 open Milekic.YoLo
 open MBrace.FsPickler
+open FSharp.Data
 
 [<NoComparison; NoEquality>]
 type Argument =
     | [<ExactlyOnce>] N26UserName of string
     | [<ExactlyOnce>] N26Password of string
+    | [<ExactlyOnce>] YnabAccountId of string
+    | [<ExactlyOnce>] YnabBudgetId of string
+    | [<ExactlyOnce>] YnabAuthenticationToken of string
+    | [<NoAppSettings; Unique>] From of string
+    | [<NoAppSettings; Unique>] Until of string
     interface IArgParserTemplate with
-        member _.Usage = "TODO Add usage"
+        member _.Usage = " "
 
 let configFilePath = "N26DirectImport.config"
 let accessTokenFilePath = "N26DirectImportAccessToken"
@@ -57,11 +63,56 @@ let main argv =
                     result
             N26Api.makeHeaders accessToken
 
-        let from = DateTimeOffset.Now - TimeSpan.FromDays 14.0
-        let until = DateTimeOffset.Now
+        let from =
+            arguments.TryPostProcessResult (From, DateTimeOffset.Parse)
+            |> Option.defaultValue (DateTimeOffset.Now - TimeSpan.FromDays 7.0)
+        let until =
+            arguments.TryPostProcessResult (Until, DateTimeOffset.Parse)
+            |> Option.defaultValue DateTimeOffset.Now
 
-        N26Api.getTransactions n26AuthenticationHeaders (from, until)
+        let typesToInclude = [| "PT"; "DT"; "CT"; "DD"; "AV"; "PF" |]
+        let ynabAccountId =
+            arguments.PostProcessResult (YnabAccountId, Guid.Parse)
+        let ynabBudgetId =
+            arguments.PostProcessResult (YnabBudgetId, Guid.Parse)
+        let ynabAuthenticationToken = arguments.GetResult YnabAuthenticationToken
+
+        let transactions =
+            N26Api.getTransactions n26AuthenticationHeaders (from, until)
+            |> Seq.where (fun x -> Array.contains x.Type typesToInclude)
+            |> flip Seq.map <| fun n26 ->
+                seq {
+                    "import_id", n26.Id.ToString()
+                    "cleared", "cleared"
+                    "amount", Math.Round(n26.Amount * 1000.0m).ToString()
+                    "date",
+                        n26.CreatedTs
+                        |> int64
+                        |> DateTimeOffset.FromUnixTimeMilliseconds
+                        |> fun d -> d.ToLocalTime().Date.ToString("yyyy-MM-dd")
+                    "memo",
+                        seq { n26.MerchantName; n26.ReferenceText }
+                        |> Seq.onlySome
+                        |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
+                        |> Option.defaultValue ""
+                    "account_id", ynabAccountId.ToString()
+                }
+                |> Seq.map (fun (k,v ) -> k, JsonValue.String v)
+                |> Seq.toArray
+                |> JsonValue.Record
+                |> YnabApi.TransactionsResponse.Transaction
+
+        printfn "The following transactions will be imported:"
+        transactions
         |> Seq.iter (fun x -> printfn "%s" (x.JsonValue.ToString()))
+
+        printfn "Would you like to proceed (y/N)?"
+
+        if Console.ReadLine().ToLower() = "y" then
+            let ynabHeaders = YnabApi.makeHeaders ynabAuthenticationToken
+            YnabApi.addYnabTransactions ynabHeaders ynabBudgetId transactions
+            |> Result.map ignore
+            |> Result.failOnError "Adding YNAB transactions failed"
 
         0
     with
