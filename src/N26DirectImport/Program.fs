@@ -19,8 +19,19 @@ type Argument =
     interface IArgParserTemplate with
         member _.Usage = " "
 
-let configFilePath = "N26DirectImport.config"
-let accessTokenFilePath = "N26DirectImportAccessToken"
+let configFilePath =
+    Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".N26DirectImport",
+        "N26DirectImport.config")
+
+let accessTokenFilePath =
+    Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".N26DirectImport",
+        "N26DirectImportAccessToken")
+
+Directory.CreateDirectory(Path.GetDirectoryName(configFilePath)) |> ignore
 
 [<EntryPoint>]
 let main argv =
