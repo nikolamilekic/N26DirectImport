@@ -77,23 +77,38 @@ let main argv =
             arguments.PostProcessResult (YnabBudgetId, Guid.Parse)
         let ynabAuthenticationToken = arguments.GetResult YnabAuthenticationToken
 
-        let transactions =
+        let n26Transactions =
             N26Api.getTransactions n26AuthenticationHeaders (from, until)
+            |> Seq.toArray
+
+        printfn "The following transactions have been received from N26:"
+
+        n26Transactions
+        |> Seq.iter (fun x -> printfn "%s" (x.JsonValue.ToString()))
+
+        let transactions =
+            n26Transactions
             |> Seq.where (fun x -> Array.contains x.Type typesToInclude)
             |> flip Seq.map <| fun n26 ->
                 seq {
                     "import_id", n26.Id.ToString()
                     "cleared", "cleared"
                     "amount", Math.Round(n26.Amount * 1000.0m).ToString()
+                    "payee_name",
+                        seq { n26.MerchantName; n26.PartnerName }
+                        |> Seq.onlySome
+                        |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
+                        |> Option.defaultValue ""
                     "date",
                         n26.CreatedTs
                         |> int64
                         |> DateTimeOffset.FromUnixTimeMilliseconds
                         |> fun d -> d.ToLocalTime().Date.ToString("yyyy-MM-dd")
                     "memo",
-                        seq { n26.MerchantName; n26.ReferenceText }
-                        |> Seq.onlySome
-                        |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
+                        n26.ReferenceText
+                        |> flip Option.bind <| fun x ->
+                            if String.IsNullOrWhiteSpace(x)
+                            then None else Some x
                         |> Option.defaultValue ""
                     "account_id", ynabAccountId.ToString()
                 }
