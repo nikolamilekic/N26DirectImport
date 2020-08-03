@@ -137,8 +137,12 @@ let main argv =
         if Console.ReadLine().ToLower() = "y" then
             let ynabHeaders = YnabApi.makeHeaders ynabAuthenticationToken
             YnabApi.addYnabTransactions ynabHeaders ynabBudgetId transactions
-            |> Result.map ignore
+            |> Result.map (fun _ -> printfn "Done.")
             |> Result.failOnError "Adding YNAB transactions failed"
+
+        let accountInfo = N26Api.getAccountInfo n26AuthenticationHeaders
+
+        printfn "Cleared balance: %s" (String.Format("{0,0:N2}", accountInfo.BankBalance))
 
         0
     with
