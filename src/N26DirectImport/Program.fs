@@ -111,7 +111,7 @@ let main argv =
                         |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
                         |> Option.defaultValue ""
                     "date",
-                        n26.CreatedTs
+                        n26.VisibleTs
                         |> int64
                         |> DateTimeOffset.FromUnixTimeMilliseconds
                         |> fun d -> d.ToLocalTime().Date.ToString("yyyy-MM-dd")
