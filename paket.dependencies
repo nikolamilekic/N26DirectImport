@@ -9,3 +9,4 @@ nuget FSharp.Data
 nuget Milekic.YoLo
 nuget Argu
 nuget FsPickler
+nuget GitInfo

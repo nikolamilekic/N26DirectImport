@@ -16,6 +16,7 @@ type Argument =
     | [<ExactlyOnce>] YnabAuthenticationToken of string
     | [<NoAppSettings; Unique>] From of string
     | [<NoAppSettings; Unique>] Until of string
+    | [<NoAppSettings>] Version
     interface IArgParserTemplate with
         member _.Usage = " "
 
@@ -35,6 +36,14 @@ Directory.CreateDirectory(Path.GetDirectoryName(configFilePath)) |> ignore
 
 [<EntryPoint>]
 let main argv =
+    printfn
+        "Version: %s.%s.%s+%s%s"
+        ThisAssembly.Git.SemVer.Major
+        ThisAssembly.Git.SemVer.Minor
+        ThisAssembly.Git.SemVer.Patch
+        ThisAssembly.Git.Commit
+        (if ThisAssembly.Git.IsDirty then "-DIRTY" else "")
+
     try
         let arguments =
             ArgumentParser
@@ -46,6 +55,8 @@ let main argv =
                         then ConfigurationReader.FromAppSettingsFile configFilePath
                         else ConfigurationReader.NullReader
                 )
+
+        if arguments.TryGetResult Version |> Option.isSome then exit 0
 
         arguments.GetAllResults()
         |> arguments.Parser.PrintAppSettingsArguments

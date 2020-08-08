@@ -11,6 +11,7 @@ NUGET
     FsPickler (5.3.2)
       FSharp.Core (>= 4.3.2)
       System.Reflection.Emit.Lightweight (>= 4.3)
+    GitInfo (2.0.31)
     Microsoft.NETCore.Platforms (3.1.1) - restriction: || (== netcoreapp3.1) (&& (== netstandard2.0) (>= netcoreapp2.0)) (&& (== netstandard2.1) (>= netcoreapp2.0))
     Microsoft.Win32.SystemEvents (4.7) - restriction: || (== netcoreapp3.1) (&& (== netstandard2.0) (>= netcoreapp3.0)) (&& (== netstandard2.1) (>= netcoreapp3.0))
       Microsoft.NETCore.Platforms (>= 3.1) - restriction: || (== netcoreapp3.1) (&& (== netstandard2.0) (>= netcoreapp2.0)) (&& (== netstandard2.1) (>= netcoreapp2.0))
