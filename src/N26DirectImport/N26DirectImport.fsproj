@@ -10,5 +10,6 @@
     <Compile Include="N26Api.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
+  <Import Project="..\..\paket-files\nikolamilekic\Milekic.YoLo\src\Milekic.YoLo\SetVersion.targets" />
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

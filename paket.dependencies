@@ -9,4 +9,5 @@ nuget FSharp.Data
 nuget Milekic.YoLo
 nuget Argu
 nuget FsPickler
-nuget GitInfo
+nuget GitInfo = 2.0.26
+github nikolamilekic/Milekic.YoLo src/Milekic.YoLo/SetVersion.targets
