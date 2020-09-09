@@ -2,7 +2,7 @@ version 5.224.0
 storage none
 source https://api.nuget.org/v3/index.json
 
-framework: netcoreapp3.1, netstandard2.0, netstandard2.1
+framework: auto-detect
 
 nuget FSharp.Core redirects:on
 nuget FSharp.Data
@@ -11,3 +11,19 @@ nuget Argu
 nuget FsPickler
 nuget GitInfo = 2.0.26
 github nikolamilekic/Milekic.YoLo src/Milekic.YoLo/SetVersion.targets
+
+// [ FAKE GROUP ]
+group Build
+    storage none
+    source https://api.nuget.org/v3/index.json
+
+    framework: netstandard2.0
+
+    nuget FSharpPlus
+    nuget Fake.Api.GitHub
+    nuget Fake.BuildServer.AppVeyor
+    nuget Fake.Core.ReleaseNotes
+    nuget Fake.Core.Target
+    nuget Fake.DotNet.Cli
+    nuget Fake.IO.FileSystem
+    nuget Fake.Tools.Git
