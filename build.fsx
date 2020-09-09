@@ -49,6 +49,23 @@ module ReleaseNotesParsing =
         (ReleaseNotes.load releaseNotesFile).Notes
         |> String.concat Environment.NewLine
 
+module ZipArtifacts =
+    //nuget Fake.IO.FileSystem
+    //nuget Fake.IO.Zip
+
+    open Fake.IO
+    open Fake.IO.Globbing.Operators
+
+    let zipArtifacts =
+        lazy
+            let files = (!! "publish/**") |> Seq.toList
+            printfn "Creating zip file from files:\n%A" files
+            Zip.zip
+                "publish"
+                "publish/artifacts.zip"
+                files
+        |> fun x -> fun () -> x.Value
+
 module Clean =
     //nuget FSharpPlus
     //nuget Fake.IO.FileSystem
@@ -85,7 +102,6 @@ module Publish =
     //nuget Fake.DotNet.Cli
     //nuget Fake.IO.FileSystem
 
-    open System
     open System.IO
     open Fake.DotNet
     open Fake.Core
@@ -150,6 +166,7 @@ module UploadArtifactsToGitHub =
     open CustomTargetOperators
     open FinalVersion
     open ReleaseNotesParsing
+    open ZipArtifacts
 
     let productName = "N26DirectImport"
     let gitOwner = "nikolamilekic"
@@ -159,6 +176,8 @@ module UploadArtifactsToGitHub =
         if c.Context.FinalTarget = "AppVeyor" && finalVersion.PreRelease.IsSome
         then ()
         else
+
+        zipArtifacts()
 
         let token = Environment.environVarOrFail "GitHubToken"
         GitHub.createClientWithToken token
@@ -171,7 +190,7 @@ module UploadArtifactsToGitHub =
                     Body = releaseNotes.Value
                     Prerelease = (finalVersion.PreRelease <> None)
                     TargetCommitish = AppVeyor.Environment.RepoCommit })
-        |> GitHub.uploadFiles !! "publish/*"
+        |> GitHub.uploadFiles (!! "publish/**/*.nupkg" ++ "publish/artifacts.zip")
         |> GitHub.publishDraft
         |> Async.RunSynchronously
 
@@ -202,6 +221,7 @@ module AppVeyor =
 
     open CustomTargetOperators
     open FinalVersion
+    open ZipArtifacts
 
     Target.create "SetAppVeyorVersion" <| fun _ ->
         if AppVeyor.detect() then
@@ -219,7 +239,7 @@ module AppVeyor =
     [ "SetAppVeyorVersion" ] ==> "UploadArtifactsToGitHub"
     [ "Build"; "Publish" ] ?=> "SetAppVeyorVersion"
 
-    Target.create "AppVeyor" ignore
+    Target.create "AppVeyor" (ignore >> zipArtifacts)
     [
         "UploadArtifactsToGitHub"
         "Publish"

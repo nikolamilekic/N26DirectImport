@@ -11,7 +11,8 @@ branches:
   only:
   - release
 artifacts:
-  - path: publish/*
+  - path: publish\artifacts.zip
+  - path: publish\**\*.nupkg
 nuget:
   project_feed: true
 environment:
