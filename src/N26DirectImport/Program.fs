@@ -85,7 +85,7 @@ let main argv =
 
         let from =
             arguments.TryPostProcessResult (From, DateTimeOffset.Parse)
-            |> Option.defaultValue (DateTimeOffset.Now - TimeSpan.FromDays 7.0)
+            |> Option.defaultValue (DateTimeOffset.Now - TimeSpan.FromDays 14.0)
         let until =
             arguments.TryPostProcessResult (Until, DateTimeOffset.Parse)
             |> Option.defaultValue DateTimeOffset.Now
