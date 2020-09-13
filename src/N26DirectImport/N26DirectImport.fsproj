@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp3.1</TargetFrameworks>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
     <Content Include="app.config" />
@@ -10,6 +10,6 @@
     <Compile Include="N26Api.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
-  <Import Project="..\..\paket-files\nikolamilekic\Milekic.YoLo\src\Milekic.YoLo\SetVersion.targets" />
+  <Import Project="..\..\packages\Milekic.YoLo\SetVersion.targets" />
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

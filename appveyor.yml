@@ -2,7 +2,7 @@ image: Visual Studio 2019
 init:
   - git config --global core.autocrlf input
 build_script:
-  - cmd: build.cmd -t AppVeyor -p 2
+  - cmd: build.cmd -t AppVeyor -p 4
 install:
   - ps: Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -UseBasicParsing -OutFile "$env:temp\dotnet-install.ps1"
   - ps: '& $env:temp\dotnet-install.ps1 -Architecture x64 -Version 3.1.302 -InstallDir "$env:ProgramFiles\dotnet"'
@@ -11,8 +11,8 @@ branches:
   only:
   - release
 artifacts:
-  - path: publish\artifacts.zip
-  - path: publish\**\*.nupkg
+  - path: publish\*.zip
+  - path: publish\*.nupkg
 nuget:
   project_feed: true
 environment:

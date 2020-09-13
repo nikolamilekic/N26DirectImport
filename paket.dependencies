@@ -1,21 +1,20 @@
-version 5.224.0
-storage none
 source https://api.nuget.org/v3/index.json
+storage: none
 
 framework: auto-detect
 
 nuget FSharp.Core redirects:on
+nuget FSharpPlus
 nuget FSharp.Data
-nuget Milekic.YoLo
+nuget Milekic.YoLo storage: symlink
 nuget Argu
 nuget FsPickler
-nuget GitInfo = 2.0.26
-github nikolamilekic/Milekic.YoLo src/Milekic.YoLo/SetVersion.targets
+nuget GitInfo
 
 // [ FAKE GROUP ]
 group Build
-    storage none
     source https://api.nuget.org/v3/index.json
+    storage: none
 
     framework: netstandard2.0
 

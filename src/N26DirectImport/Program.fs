@@ -4,6 +4,7 @@ open System
 open System.IO
 open Argu
 open Milekic.YoLo
+open FSharpPlus
 open MBrace.FsPickler
 open FSharp.Data
 
@@ -37,12 +38,9 @@ Directory.CreateDirectory(Path.GetDirectoryName(configFilePath)) |> ignore
 [<EntryPoint>]
 let main argv =
     printfn
-        "Version: %s.%s.%s+%s%s"
-        ThisAssembly.Git.SemVer.Major
-        ThisAssembly.Git.SemVer.Minor
-        ThisAssembly.Git.SemVer.Patch
-        ThisAssembly.Git.Commit
-        (if ThisAssembly.Git.IsDirty then "-DIRTY" else "")
+        "N26DirectImport Version: %s (%s)"
+        (Metadata.getCallingAssemblyInformationalVersion())
+        (DateTimeOffset.Parse(ThisAssembly.Git.CommitDate).ToString("yyyy-MM-dd"))
 
     try
         let arguments =
@@ -118,7 +116,7 @@ let main argv =
                     "amount", Math.Round(n26.Amount * 1000.0m).ToString()
                     "payee_name",
                         seq { n26.MerchantName; n26.PartnerName }
-                        |> Seq.onlySome
+                        |> Seq.choose id
                         |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
                         |> Option.defaultValue ""
                     "date",
