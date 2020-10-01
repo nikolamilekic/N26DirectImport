@@ -121,19 +121,30 @@ module Publish =
         if m.Success then Some(List.tail [ for g in m.Groups -> g.Value ])
         else None
 
+    let runtimesToTarget = [ "osx-x64"; "win-x64"; "linux-arm"; "linux-x64" ]
+
     let projectsToPublish =
         !! "src/*/*.fsproj"
         |> Seq.toList
         >>= fun projectFile ->
             match File.readAsString projectFile with
-            | Regex "TargetFramework.+(netcoreapp.+)<\/TargetFramework" [ framework ] ->
+            | Regex "TargetFramework.*>(.+)<\/TargetFramework" [ frameworks ] ->
                 let projectDirectory = Path.GetDirectoryName projectFile
-                [ "osx-x64"; "win-x64"; "linux-arm" ]
-                |>> fun runtime ->
-                    projectDirectory,
-                    Some framework,
-                    Some runtime,
-                    Some "-p:PublishSingleFile=true -p:PublishTrimmed=true"
+                frameworks
+                |> String.split [";"]
+                |> Seq.filter (fun x -> x.StartsWith "netcoreapp")
+                |> Seq.toList
+                >>= fun framework ->
+                    let custom =
+                        if framework.StartsWith ("netcoreapp3")
+                        then Some "-p:PublishSingleFile=true -p:PublishTrimmed=true"
+                        else None
+                    runtimesToTarget
+                    |>> fun runtime ->
+                        projectDirectory,
+                        Some framework,
+                        Some runtime,
+                        custom
             | _ -> []
 
     Target.create "Publish" <| fun _ ->
