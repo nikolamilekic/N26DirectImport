@@ -1,6 +1,7 @@
 module N26DirectImport.Program
 
 open System
+open System.Diagnostics
 open System.IO
 open Argu
 open Milekic.YoLo
@@ -11,10 +12,12 @@ open FSharp.Data
 [<NoComparison; NoEquality>]
 type Argument =
     | [<ExactlyOnce>] N26UserName of string
-    | [<ExactlyOnce>] N26Password of string
+    | N26Password of string
+    | N26PasswordCommand of string
     | [<ExactlyOnce>] YnabAccountId of string
     | [<ExactlyOnce>] YnabBudgetId of string
-    | [<ExactlyOnce>] YnabAuthenticationToken of string
+    | YnabAuthenticationToken of string
+    | YnabAuthenticationTokenCommand of string
     | [<NoAppSettings; Unique>] From of string
     | [<NoAppSettings; Unique>] Until of string
     | [<NoAppSettings>] Version
@@ -34,6 +37,22 @@ let accessTokenFilePath =
         "N26DirectImportAccessToken")
 
 Directory.CreateDirectory(Path.GetDirectoryName(configFilePath)) |> ignore
+
+let runCommand (command : string) =
+    let words = command.Split (" ")
+    let command = Array.head words
+    let args = words |> Array.skip 1 |> String.concat " "
+    let psi =
+        ProcessStartInfo(
+            command,
+            args,
+            RedirectStandardOutput=true,
+            RedirectStandardError=true)
+    let p = Process.Start(psi)
+    p.WaitForExit()
+    if p.ExitCode = 0
+    then p.StandardOutput.ReadToEnd()
+    else failwith (p.StandardError.ReadToEnd())
 
 [<EntryPoint>]
 let main argv =
@@ -75,7 +94,13 @@ let main argv =
                         None
                 |> flip Option.defaultWith <| fun () ->
                     let n26UserName = arguments.GetResult N26UserName
-                    let n26Password = arguments.GetResult N26Password
+
+                    let n26Password =
+                        arguments.TryGetResult N26Password
+                        |> Option.defaultWith(fun () ->
+                            arguments.PostProcessResult(
+                                N26PasswordCommand, runCommand))
+
                     let result =
                         N26Api.requestAccessToken (n26UserName, n26Password)
                         |> Async.RunSynchronously
@@ -95,7 +120,12 @@ let main argv =
             arguments.PostProcessResult (YnabAccountId, Guid.Parse)
         let ynabBudgetId =
             arguments.PostProcessResult (YnabBudgetId, Guid.Parse)
-        let ynabAuthenticationToken = arguments.GetResult YnabAuthenticationToken
+
+        let ynabAuthenticationToken =
+            arguments.TryGetResult YnabAuthenticationToken
+            |> Option.defaultWith (fun () ->
+                arguments.PostProcessResult(
+                    YnabAuthenticationTokenCommand, runCommand))
 
         let n26Transactions =
             N26Api.getTransactions n26AuthenticationHeaders (from, until)
