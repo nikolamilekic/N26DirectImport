@@ -1,3 +1,7 @@
+## New in 2.2 (Released 2020/12/13)
+* Added payee name to memo
+* Now targeting .NET 5
+
 ## New in 2.1 (Released 2020/10/01)
 * Added the ability to get the YNAB authentication token and N26 password from commands
 

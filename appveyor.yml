@@ -5,7 +5,7 @@ build_script:
   - cmd: build.cmd -t AppVeyor -p 4
 install:
   - ps: Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -UseBasicParsing -OutFile "$env:temp\dotnet-install.ps1"
-  - ps: '& $env:temp\dotnet-install.ps1 -Architecture x64 -Version 3.1.302 -InstallDir "$env:ProgramFiles\dotnet"'
+  - ps: '& $env:temp\dotnet-install.ps1 -Architecture x64 -Version 5.0.101 -InstallDir "$env:ProgramFiles\dotnet"'
 skip_tags: true
 branches:
   only:
@@ -19,4 +19,4 @@ environment:
   GitHubToken:
     secure: Eymchtm/ooRHPQDIZ99Uyl6cjSHSJ8bl0saXVbO1BhAT+jDD1s/K87WsZvSP2Qgm
   NUGET_KEY:
-    secure: illnma78GPXDdNpnrKyszkPvsO35AnXH3ayGNXtzm4vXpY6k2PkyM5FAKD1/Gqld
+    secure: krwLpJ7tHgqF2/BOOYFWTSSuf+WYg1gJ3tb/p1Kfn0lB23YRKOQs56ei0n1DgnQM

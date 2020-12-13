@@ -125,27 +125,39 @@ module Publish =
 
     let projectsToPublish =
         !! "src/*/*.fsproj"
-        |> Seq.toList
-        >>= fun projectFile ->
-            match File.readAsString projectFile with
-            | Regex "TargetFramework.*>(.+)<\/TargetFramework" [ frameworks ] ->
+        |> toSeq
+        |>> fun projectFile ->
+            let contents = File.readAsString projectFile
+            let outputType =
+                match contents with
+                | Regex "<OutputType>(.+)<\/OutputType>" [ outputType ] ->
+                    Some (outputType.ToLower())
+                | _ -> None
+            projectFile, contents, outputType
+        |> Seq.filter (fun (_, _, outputType) -> outputType = Some "exe")
+        >>= fun (projectFile, contents, _) ->
+            match contents with
+            | Regex "<TargetFramework.*>(.+)<\/TargetFramework" [ frameworks ] ->
                 let projectDirectory = Path.GetDirectoryName projectFile
                 frameworks
                 |> String.split [";"]
-                |> Seq.filter (fun x -> x.StartsWith "netcoreapp")
-                |> Seq.toList
+                |> Seq.filter (fun x -> x.StartsWith "netcoreapp" || x = "net5.0")
                 >>= fun framework ->
                     let custom =
-                        if framework.StartsWith ("netcoreapp3")
-                        then Some "-p:PublishSingleFile=true -p:PublishTrimmed=true"
-                        else None
+                        match framework with
+                        | x when x.StartsWith "netcoreapp3" ->
+                            Some "-p:PublishSingleFile=true -p:PublishTrimmed=true"
+                        | "net5.0" ->
+                            Some "-p:PublishSingleFile=true -p:PublishTrimmed=true -p:IncludeNativeLibrariesForSelfExtract=true"
+                        | _ -> None
                     runtimesToTarget
+                    |> List.toSeq
                     |>> fun runtime ->
                         projectDirectory,
                         Some framework,
                         Some runtime,
                         custom
-            | _ -> []
+            | _ -> Seq.empty
 
     Target.create "Publish" <| fun _ ->
         for (project, framework, runtime, custom) in projectsToPublish do
