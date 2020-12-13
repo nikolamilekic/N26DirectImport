@@ -140,26 +140,33 @@ let main argv =
             n26Transactions
             |> Seq.where (fun x -> Array.contains x.Type typesToInclude)
             |> flip Seq.map <| fun n26 ->
+                let payeeName =
+                    seq { n26.MerchantName; n26.PartnerName }
+                    |> Seq.choose id
+                    |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
+                let referenceText =
+                    n26.ReferenceText
+                    |> flip Option.bind <| fun x ->
+                        if String.IsNullOrWhiteSpace(x)
+                        then None else Some x
+
                 seq {
                     "import_id", n26.Id.ToString()
                     "cleared", "cleared"
                     "amount", Math.Round(n26.Amount * 1000.0m).ToString()
-                    "payee_name",
-                        seq { n26.MerchantName; n26.PartnerName }
-                        |> Seq.choose id
-                        |> Seq.tryFind (fun x -> String.IsNullOrWhiteSpace(x) = false)
-                        |> Option.defaultValue ""
+                    "payee_name", Option.defaultValue "" payeeName
                     "date",
                         n26.VisibleTs
                         |> int64
                         |> DateTimeOffset.FromUnixTimeMilliseconds
                         |> fun d -> d.ToLocalTime().Date.ToString("yyyy-MM-dd")
                     "memo",
-                        n26.ReferenceText
-                        |> flip Option.bind <| fun x ->
-                            if String.IsNullOrWhiteSpace(x)
-                            then None else Some x
-                        |> Option.defaultValue ""
+                        seq {
+                            payeeName |>> sprintf "Payee: %s"
+                            referenceText |>> sprintf "Reference: %s"
+                        }
+                        |> Seq.choose id
+                        |> String.concat " "
                     "account_id", ynabAccountId.ToString()
                 }
                 |> Seq.map (fun (k,v ) -> k, JsonValue.String v)
