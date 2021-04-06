@@ -19,8 +19,8 @@ type AccessToken = JsonProvider<AccessTokenSamplePath>
 type N26AccountInfo = JsonProvider<"""{"id":"343dde6b-de8d-4651-bb1c-59b9c9d1f9a4","availableBalance":14.47,"usableBalance":14.47,"bankBalance":55.5,"iban":"DE89100110012628266077","bic":"NTSBDEB1XXX","bankName":"N26 Bank","seized":false,"currency":"EUR","legalEntity":"EU","externalId":{"iban":"DE89100110012628266077"}}""">
 
 let authenticationHeaders = [
-    "Authorization", "Basic bXktdHJ1c3RlZC13ZHBDbGllbnQ6c2VjcmV0"
     "device-token", "0ff70bc0-787a-4a0e-a7a3-c6efce0b92a3"
+    "Authorization", "Basic bmF0aXZld2ViOg=="
 ]
 
 let getTransactions headers (from : DateTimeOffset, until : DateTimeOffset) =
@@ -63,7 +63,7 @@ let requestAccessToken (username, password) = async {
 
     let mfaResponse =
         Http.RequestString (
-            "https://api.tech26.de/oauth/token",
+            "https://api.tech26.global/oauth2/token",
             body = (
                 [
                     "username", username
