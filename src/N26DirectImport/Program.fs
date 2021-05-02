@@ -51,7 +51,7 @@ let runCommand (command : string) =
     let p = Process.Start(psi)
     p.WaitForExit()
     if p.ExitCode = 0
-    then p.StandardOutput.ReadToEnd()
+    then p.StandardOutput.ReadToEnd().Trim()
     else failwith (p.StandardError.ReadToEnd())
 
 [<EntryPoint>]
